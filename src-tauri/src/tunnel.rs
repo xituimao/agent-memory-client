@@ -27,15 +27,9 @@ pub async fn tunnel_loop(app: AppHandle, state: SharedState) {
             continue;
         }
 
-        if !config.auto_connect {
+        if state.manual_disconnect.load(Ordering::SeqCst) {
             state.ssh_alive.store(false, Ordering::SeqCst);
-            state::set_status(
-                &app,
-                &state,
-                Status::Offline {
-                    detail: "已暂停（自动连接已关闭）".to_string(),
-                },
-            );
+            state::set_status(&app, &state, Status::Disconnected);
             state.tunnel_notify.notified().await;
             backoff = MIN_BACKOFF;
             continue;

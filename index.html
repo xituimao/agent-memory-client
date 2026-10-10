@@ -7,86 +7,123 @@
   </head>
   <body>
     <main class="app">
-      <header class="status-card" id="statusCard">
-        <span class="status-dot" id="statusDot"></span>
-        <div class="status-text">
-          <h1 id="statusTitle">载入中…</h1>
-          <p id="statusSub">正在读取配置</p>
-        </div>
-        <button class="ghost-btn" id="btnViewer" title="在浏览器中打开记忆查看器">查看器</button>
-      </header>
+      <!-- ===== 主界面（VPN 式） ===== -->
+      <section class="view view-home" id="viewHome">
+        <header class="home-header">
+          <h1>Agent Memory</h1>
+          <button class="icon-btn" id="btnOpenSettings" title="设置">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h0a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h0a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v0a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+          </button>
+        </header>
 
-      <section class="card">
-        <h2>服务器</h2>
-        <div class="grid-2">
-          <label class="field span-2">
-            <span>服务器地址</span>
-            <input id="host" type="text" placeholder="your-server-ip" />
-          </label>
-          <label class="field">
-            <span>SSH 端口</span>
-            <input id="sshPort" type="number" min="1" max="65535" value="22" />
-          </label>
-          <label class="field">
-            <span>SSH 用户</span>
-            <input id="sshUser" type="text" placeholder="root" />
-          </label>
-          <label class="field span-2">
-            <span>SSH 私钥路径<em class="hint">留空则使用默认密钥</em></span>
-            <div class="row">
-              <input id="sshKeyPath" type="text" placeholder="~/.ssh/id_ed25519" />
-              <button class="ghost-btn" id="btnPickKey">浏览…</button>
+        <div class="hero" id="hero">
+          <div class="ring-wrap">
+            <svg class="ring" viewBox="0 0 200 200">
+              <circle class="ring-bg" cx="100" cy="100" r="88" />
+              <circle class="ring-fg" id="ringFg" cx="100" cy="100" r="88" />
+            </svg>
+            <div class="hero-inner">
+              <span class="hero-status" id="heroStatus">载入中…</span>
+              <span class="hero-sub" id="heroSub"></span>
             </div>
-          </label>
+          </div>
+
+          <button class="power-btn" id="btnPower" title="连接 / 断开">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 3v8"/><path d="M6.3 6.3a8 8 0 1 0 11.4 0"/></svg>
+          </button>
+          <span class="power-label" id="powerLabel">连接</span>
+        </div>
+
+        <footer class="home-links">
+          <button class="link-btn" id="btnViewer">打开记忆查看器</button>
+          <span class="dot-sep">·</span>
+          <button class="link-btn" id="btnCopy">复制 MCP 命令</button>
+        </footer>
+      </section>
+
+      <!-- ===== 设置 ===== -->
+      <section class="view view-settings hidden" id="viewSettings">
+        <header class="settings-header">
+          <button class="icon-btn" id="btnBack" title="返回">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+          </button>
+          <h1>设置</h1>
+        </header>
+
+        <div class="settings-body">
+          <section class="card">
+            <h2>服务器</h2>
+            <label class="field">
+              <span>服务器地址</span>
+              <input id="host" type="text" placeholder="your-server-ip" />
+            </label>
+            <div class="grid-2">
+              <label class="field">
+                <span>SSH 端口</span>
+                <input id="sshPort" type="number" min="1" max="65535" value="22" />
+              </label>
+              <label class="field">
+                <span>SSH 用户</span>
+                <input id="sshUser" type="text" placeholder="root" />
+              </label>
+            </div>
+            <label class="field">
+              <span>SSH 私钥<em class="hint">留空用默认密钥</em></span>
+              <div class="row">
+                <input id="sshKeyPath" type="text" placeholder="~/.ssh/id_ed25519" />
+                <button class="ghost-btn" id="btnPickKey">浏览…</button>
+              </div>
+            </label>
+          </section>
+
+          <section class="card">
+            <h2>认证与端口</h2>
+            <label class="field">
+              <span>Bearer Token<em class="hint">服务器上 cat ~/.agentmemory/secret</em></span>
+              <input id="token" type="password" placeholder="AGENTMEMORY_SECRET" autocomplete="off" />
+            </label>
+            <div class="grid-2">
+              <label class="field">
+                <span>REST 端口</span>
+                <input id="restPort" type="number" min="1" max="65535" value="3111" />
+              </label>
+              <label class="field">
+                <span>Viewer 端口</span>
+                <input id="viewerPort" type="number" min="1" max="65535" value="3113" />
+              </label>
+            </div>
+          </section>
+
+          <details class="card">
+            <summary>高级</summary>
+            <label class="field">
+              <span>Agent 名称<em class="hint">生成 MCP 命令用</em></span>
+              <input id="agentName" type="text" placeholder="claude-code" />
+            </label>
+            <label class="field">
+              <span>附加 SSH 参数<em class="hint">空格分隔</em></span>
+              <input id="extraSshArgs" type="text" placeholder="如 -J jump@bastion" />
+            </label>
+          </details>
+
+          <section class="card switches">
+            <label class="switch">
+              <input id="autoConnect" type="checkbox" />
+              <span>启动时自动连接</span>
+            </label>
+            <label class="switch">
+              <input id="autoStart" type="checkbox" />
+              <span>登录系统时启动</span>
+            </label>
+          </section>
+
+          <div class="settings-actions">
+            <button class="secondary" id="btnTest">测试连接</button>
+            <button class="primary" id="btnSave">保存</button>
+          </div>
         </div>
       </section>
 
-      <section class="card">
-        <h2>端口与认证</h2>
-        <div class="grid-2">
-          <label class="field">
-            <span>REST 端口</span>
-            <input id="restPort" type="number" min="1" max="65535" value="3111" />
-          </label>
-          <label class="field">
-            <span>Viewer 端口</span>
-            <input id="viewerPort" type="number" min="1" max="65535" value="3113" />
-          </label>
-          <label class="field span-2">
-            <span>Bearer Token<em class="hint">服务器上执行 cat ~/.agentmemory/secret 获取</em></span>
-            <input id="token" type="password" placeholder="AGENTMEMORY_SECRET" autocomplete="off" />
-          </label>
-          <label class="field span-2">
-            <span>Agent 名称<em class="hint">用于生成 MCP 接入命令</em></span>
-            <input id="agentName" type="text" placeholder="claude-code" />
-          </label>
-        </div>
-      </section>
-
-      <details class="card">
-        <summary>高级</summary>
-        <label class="field">
-          <span>附加 SSH 参数<em class="hint">空格分隔，原样追加</em></span>
-          <input id="extraSshArgs" type="text" placeholder="如 -J jump@bastion" />
-        </label>
-      </details>
-
-      <section class="card switches">
-        <label class="switch">
-          <input id="autoConnect" type="checkbox" />
-          <span>启动时自动建立隧道</span>
-        </label>
-        <label class="switch">
-          <input id="autoStart" type="checkbox" />
-          <span>登录系统时启动本应用</span>
-        </label>
-      </section>
-
-      <footer class="actions">
-        <button class="secondary" id="btnTest">测试连接</button>
-        <button class="secondary" id="btnCopy">复制 MCP 命令</button>
-        <button class="primary" id="btnSave">保存并重连</button>
-      </footer>
       <p class="toast" id="toast"></p>
     </main>
     <script type="module" src="/src/main.ts"></script>

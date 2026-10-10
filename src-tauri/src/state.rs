@@ -19,6 +19,8 @@ pub enum Status {
     Online { latency_ms: u64 },
     /// 隧道断开或探活失败，自动重试中
     Offline { detail: String },
+    /// 用户手动断开（VPN 式按钮），不会自动重连，直到用户再次连接
+    Disconnected,
 }
 
 impl Status {
@@ -28,6 +30,7 @@ impl Status {
             Status::Connecting => "连接中…".to_string(),
             Status::Online { latency_ms } => format!("已连接 · {} ms", latency_ms),
             Status::Offline { detail } => format!("未连接 · {}", detail),
+            Status::Disconnected => "已断开".to_string(),
         }
     }
 }
@@ -40,6 +43,8 @@ pub struct Inner {
     pub tunnel_generation: AtomicU64,
     /// 隧道 ssh 子进程是否存活（由 tunnel 循环维护）
     pub ssh_alive: AtomicBool,
+    /// 手动断开标志：置位后不自动建隧道，直到用户点「连接」
+    pub manual_disconnect: AtomicBool,
     /// 隧道循环的唤醒信号（配置保存后触发重启）
     pub tunnel_notify: tokio::sync::Notify,
     /// 当前 ssh 子进程（用于强制终止）
@@ -53,12 +58,14 @@ use std::sync::Arc;
 pub fn new(app_config_dir: &std::path::Path) -> SharedState {
     let path = config_path(app_config_dir);
     let config = crate::config::load(&path);
+    let auto_connect = config.auto_connect;
     Arc::new(Inner {
         config: Mutex::new(config),
         config_path: path,
         status: Mutex::new(Status::NotConfigured),
         tunnel_generation: AtomicU64::new(0),
         ssh_alive: AtomicBool::new(false),
+        manual_disconnect: AtomicBool::new(!auto_connect),
         tunnel_notify: tokio::sync::Notify::new(),
         child: Mutex::new(None),
     })

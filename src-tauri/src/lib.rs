@@ -70,9 +70,18 @@ async fn test_connection(config: config::AppConfig) -> Result<u64, String> {
     health::probe(&client, &config).await
 }
 
-/// 手动重启隧道
+/// VPN 式「连接」按钮：立即建隧道（无论启动自连开关）
 #[tauri::command]
-fn restart_tunnel(state: tauri::State<SharedState>) {
+fn connect_tunnel(state: tauri::State<SharedState>) {
+    state.manual_disconnect.store(false, std::sync::atomic::Ordering::SeqCst);
+    state::bump_generation(&state);
+    state.tunnel_notify.notify_one();
+}
+
+/// VPN 式「断开」按钮：手动断开，不再自动重连
+#[tauri::command]
+fn disconnect_tunnel(state: tauri::State<SharedState>) {
+    state.manual_disconnect.store(true, std::sync::atomic::Ordering::SeqCst);
     state::bump_generation(&state);
     state.tunnel_notify.notify_one();
 }
@@ -167,7 +176,8 @@ pub fn run() {
             get_status,
             save_config,
             test_connection,
-            restart_tunnel
+            connect_tunnel,
+            disconnect_tunnel
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
