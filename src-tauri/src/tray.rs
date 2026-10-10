@@ -2,16 +2,19 @@ use std::sync::Mutex;
 
 use tauri::menu::{CheckMenuItem, MenuBuilder, MenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIcon, TrayIconBuilder, TrayIconEvent};
-use tauri::{AppHandle, Emitter, Manager};
-use tauri_plugin_autostart::AutolaunchExt;
+use tauri::{AppHandle, Manager, Wry};
+use tauri_plugin_autostart::ManagerExt;
+use tauri_plugin_clipboard_manager::ClipboardExt;
+use tauri_plugin_opener::OpenerExt;
 
+use crate::state as st;
 use crate::state::Status;
 
 pub struct TrayState {
     pub tray: Mutex<Option<TrayIcon>>,
-    pub title_item: Mutex<Option<MenuItem>>,
-    pub autostart_item: Mutex<Option<CheckMenuItem>>,
-    pub autoconnect_item: Mutex<Option<CheckMenuItem>>,
+    pub title_item: Mutex<Option<MenuItem<Wry>>>,
+    pub autostart_item: Mutex<Option<CheckMenuItem<Wry>>>,
+    pub autoconnect_item: Mutex<Option<CheckMenuItem<Wry>>>,
 }
 
 impl TrayState {
@@ -67,23 +70,24 @@ pub fn build_tray(app: &AppHandle, status: &Status, auto_start: bool, auto_conne
             let state = app.state::<crate::SharedState>();
             match event.id().as_ref() {
                 "open-viewer" => {
-                    let url = state.get_config().viewer_url();
+                    let url = st::get_config(&state).viewer_url();
                     let _ = app.opener().open_url(&url, None::<&str>);
                 }
                 "open-settings" => show_window(app),
                 "copy-mcp" => {
-                    let cmd = state.get_config().mcp_command();
+                    let cmd = st::get_config(&state).mcp_command();
                     let _ = app.clipboard().write_text(cmd);
                 }
                 "toggle-autostart" => {
-                    let enable = !state.get_config().auto_start;
+                    let enable = !st::get_config(&state).auto_start;
                     set_autostart(app, enable);
                 }
                 "toggle-autoconnect" => {
-                    let mut config = state.get_config();
+                    let mut config = st::get_config(&state);
                     config.auto_connect = !config.auto_connect;
-                    state.set_config(config.clone());
+                    st::set_config(&state, config.clone());
                     let _ = crate::config::save(&state.config_path, &config);
+                    st::bump_generation(&state);
                     state.tunnel_notify.notify_one();
                     sync_checkboxes(app);
                 }
@@ -94,10 +98,10 @@ pub fn build_tray(app: &AppHandle, status: &Status, auto_start: bool, auto_conne
         .build(app)?;
 
     let tray_state = app.state::<TrayState>();
-    *tray_state.tray.lock().expect("tray lock") = Some(tray);
-    *tray_state.title_item.lock().expect("title lock") = Some(title);
-    *tray_state.autostart_item.lock().expect("autostart lock") = Some(autostart_item);
-    *tray_state.autoconnect_item.lock().expect("autoconnect lock") = Some(autoconnect_item);
+    if let Ok(mut g) = tray_state.tray.lock() { *g = Some(tray); }
+    if let Ok(mut g) = tray_state.title_item.lock() { *g = Some(title); }
+    if let Ok(mut g) = tray_state.autostart_item.lock() { *g = Some(autostart_item); }
+    if let Ok(mut g) = tray_state.autoconnect_item.lock() { *g = Some(autoconnect_item); }
     Ok(())
 }
 
@@ -119,7 +123,7 @@ pub fn refresh_tray(app: &AppHandle, status: &Status) {
 
 pub fn sync_checkboxes(app: &AppHandle) {
     let state = app.state::<crate::SharedState>();
-    let config = state.get_config();
+    let config = st::get_config(&state);
     let tray_state = app.state::<TrayState>();
     if let Ok(mut guard) = tray_state.autoconnect_item.lock() {
         if let Some(item) = guard.as_mut() {
@@ -135,7 +139,7 @@ pub fn sync_checkboxes(app: &AppHandle) {
 
 pub fn set_autostart(app: &AppHandle, enable: bool) {
     let state = app.state::<crate::SharedState>();
-    let mut config = state.get_config();
+    let mut config = st::get_config(&state);
     let result = if enable {
         app.autolaunch().enable()
     } else {
@@ -143,7 +147,7 @@ pub fn set_autostart(app: &AppHandle, enable: bool) {
     };
     if result.is_ok() {
         config.auto_start = enable;
-        state.set_config(config.clone());
+        st::set_config(&state, config.clone());
         let _ = crate::config::save(&state.config_path, &config);
     }
     sync_checkboxes(app);
@@ -151,9 +155,12 @@ pub fn set_autostart(app: &AppHandle, enable: bool) {
 
 pub fn show_window(app: &AppHandle) {
     if let Some(window) = app.get_webview_window("main") {
+        // Accessory 应用窗口可能无法前置/获焦，显示期间临时提升为 Regular
+        #[cfg(target_os = "macos")]
+        let _ = app.set_activation_policy(tauri::ActivationPolicy::Regular);
         let _ = window.show();
-        let _ = window.set_focus();
         let _ = window.unminimize();
+        let _ = window.set_focus();
     }
 }
 
@@ -161,6 +168,8 @@ fn toggle_window(app: &AppHandle) {
     if let Some(window) = app.get_webview_window("main") {
         if window.is_visible().unwrap_or(false) {
             let _ = window.hide();
+            #[cfg(target_os = "macos")]
+            let _ = app.set_activation_policy(tauri::ActivationPolicy::Accessory);
         } else {
             show_window(app);
         }

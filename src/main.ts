@@ -2,6 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-dialog";
 import { openUrl } from "@tauri-apps/plugin-opener";
+import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import "./styles.css";
 
 type Status =
@@ -106,7 +107,7 @@ function toast(msg: string, ok = true) {
 }
 
 async function copyText(text: string) {
-  await navigator.clipboard.writeText(text);
+  await writeText(text);
 }
 
 els.btnPickKey.addEventListener("click", async () => {
@@ -115,8 +116,12 @@ els.btnPickKey.addEventListener("click", async () => {
 });
 
 els.btnViewer.addEventListener("click", async () => {
-  const c = readForm();
-  await openUrl(`http://localhost:${c.viewerPort}`);
+  try {
+    const c = readForm();
+    await openUrl(`http://localhost:${c.viewerPort}`);
+  } catch (e) {
+    toast(`无法打开查看器：${e}`, false);
+  }
 });
 
 els.btnTest.addEventListener("click", async () => {
@@ -134,10 +139,14 @@ els.btnTest.addEventListener("click", async () => {
 });
 
 els.btnCopy.addEventListener("click", async () => {
-  const c = readForm();
-  const cmd = `export AGENTMEMORY_URL=http://localhost:${c.restPort}\nexport AGENTMEMORY_SECRET=${c.token}\nnpx -y @agentmemory/agentmemory@latest connect ${c.agentName}`;
-  await copyText(cmd);
-  toast("MCP 接入命令已复制到剪贴板");
+  try {
+    const c = readForm();
+    const cmd = `export AGENTMEMORY_URL=http://localhost:${c.restPort}\nexport AGENTMEMORY_SECRET=${c.token}\nnpx -y @agentmemory/agentmemory@latest connect ${c.agentName}`;
+    await copyText(cmd);
+    toast("MCP 接入命令已复制到剪贴板");
+  } catch (e) {
+    toast(`复制失败：${e}`, false);
+  }
 });
 
 els.btnSave.addEventListener("click", async () => {
@@ -153,10 +162,15 @@ els.btnSave.addEventListener("click", async () => {
 });
 
 async function init() {
-  const config = await invoke<AppConfig>("get_config");
-  fillForm(config);
-  renderStatus(await invoke<Status>("get_status"));
-  await listen<Status>("status-changed", (e) => renderStatus(e.payload));
+  try {
+    const config = await invoke<AppConfig>("get_config");
+    fillForm(config);
+    renderStatus(await invoke<Status>("get_status"));
+    await listen<Status>("status-changed", (e) => renderStatus(e.payload));
+  } catch (e) {
+    els.statusTitle.textContent = "载入失败";
+    els.statusSub.textContent = String(e);
+  }
 }
 
 init();

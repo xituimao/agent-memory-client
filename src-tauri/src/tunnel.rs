@@ -14,23 +14,39 @@ const MAX_BACKOFF: Duration = Duration::from_secs(60);
 pub async fn tunnel_loop(app: AppHandle, state: SharedState) {
     let mut backoff = MIN_BACKOFF;
     loop {
-        let config = state.get_config();
+        // 先读 generation 再读配置，避免 save_config 的 bump 落在此间导致新配置永远不生效
+        let generation = state::current_generation(&state);
+        let config = state::get_config(&state);
 
-        if !config.is_valid() || !config.auto_connect {
+        if !config.is_valid() {
             state.ssh_alive.store(false, Ordering::SeqCst);
             state::set_status(&app, &state, Status::NotConfigured);
-            // 等待配置变更或重连开关打开
+            // 等待配置变更
             state.tunnel_notify.notified().await;
             backoff = MIN_BACKOFF;
             continue;
         }
 
-        let generation = state::current_generation(&state);
+        if !config.auto_connect {
+            state.ssh_alive.store(false, Ordering::SeqCst);
+            state::set_status(
+                &app,
+                &state,
+                Status::Offline {
+                    detail: "已暂停（自动连接已关闭）".to_string(),
+                },
+            );
+            state.tunnel_notify.notified().await;
+            backoff = MIN_BACKOFF;
+            continue;
+        }
+
         state.ssh_alive.store(false, Ordering::SeqCst);
         state::set_status(&app, &state, Status::Connecting);
 
-        let mut child = match Command::new("ssh")
+        let child = match Command::new("ssh")
             .args(config.ssh_args())
+            .kill_on_drop(true) // 防御：即使退出清理钩子失效也不泄漏孤儿 ssh
             .spawn()
         {
             Ok(c) => c,
@@ -48,10 +64,14 @@ pub async fn tunnel_loop(app: AppHandle, state: SharedState) {
             }
         };
 
-        let pid = child.id();
+        let pid = child.id().map(|p| p.to_string()).unwrap_or_else(|| "?".to_string());
         {
-            let mut slot = state.child.lock().expect("child lock poisoned");
-            *slot = Some(child);
+            if let Ok(mut slot) = state.child.lock() {
+                *slot = Some(child);
+            } else {
+                // 锁被毒化：放弃本子进程，交给 kill_on_drop 回收
+                continue;
+            }
         }
         state.ssh_alive.store(true, Ordering::SeqCst);
         log::info!("ssh tunnel started (pid {pid})");
@@ -60,11 +80,10 @@ pub async fn tunnel_loop(app: AppHandle, state: SharedState) {
         wait_child_or_signal(&state, generation).await;
 
         state.ssh_alive.store(false, Ordering::SeqCst);
-        {
-            let mut slot = state.child.lock().expect("child lock poisoned");
-            if let Some(mut c) = slot.take() {
-                let _ = c.kill().await;
-            }
+        // 先取出子进程并释放锁，再 await kill，避免 MutexGuard 跨 await
+        let child_to_kill = state.child.lock().ok().and_then(|mut slot| slot.take());
+        if let Some(mut c) = child_to_kill {
+            let _ = c.kill().await;
         }
         log::info!("ssh tunnel stopped (pid {pid})");
 
@@ -96,7 +115,10 @@ async fn wait_child_or_signal(state: &SharedState, generation: u64) {
             return;
         }
         let exited = {
-            let mut slot = state.child.lock().expect("child lock poisoned");
+            let Ok(mut slot) = state.child.lock() else {
+                log::error!("child lock poisoned; tunnel loop aborting one cycle");
+                return;
+            };
             match slot.as_mut() {
                 Some(child) => matches!(child.try_wait(), Ok(Some(_))),
                 None => true,

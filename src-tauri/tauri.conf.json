@@ -19,14 +19,14 @@
         "minWidth": 520,
         "minHeight": 600,
         "resizable": true,
-        "fullscreen": false
+        "fullscreen": false,
+        "visible": false
       }
     ],
     "security": {
       "csp": null
     },
-    "macOSPrivateApi": true,
-    "activationPolicy": "Accessory"
+    "macOSPrivateApi": true
   },
   "bundle": {
     "active": true,

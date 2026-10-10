@@ -3,11 +3,13 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, AtomicU64};
 use std::sync::Mutex;
 
+use tauri::Emitter;
+
 use crate::config::{config_path, AppConfig};
 
 /// 连接状态机
 #[derive(Clone, Debug, Serialize, PartialEq)]
-#[serde(tag = "state", rename_all = "camelCase")]
+#[serde(tag = "state", rename_all = "camelCase", rename_all_fields = "camelCase")]
 pub enum Status {
     /// 配置不全（缺 host 或 token），等待用户在设置窗口补全
     NotConfigured,
@@ -62,23 +64,21 @@ pub fn new(app_config_dir: &std::path::Path) -> SharedState {
     })
 }
 
-impl SharedState {
-    pub fn get_config(&self) -> AppConfig {
-        self.config.lock().map(|c| c.clone()).unwrap_or_default()
-    }
+pub fn get_config(s: &SharedState) -> AppConfig {
+    s.config.lock().map(|c| c.clone()).unwrap_or_default()
+}
 
-    pub fn set_config(&self, config: AppConfig) {
-        if let Ok(mut guard) = self.config.lock() {
-            *guard = config;
-        }
+pub fn set_config(s: &SharedState, config: AppConfig) {
+    if let Ok(mut guard) = s.config.lock() {
+        *guard = config;
     }
+}
 
-    pub fn current_status(&self) -> Status {
-        self.status
-            .lock()
-            .map(|s| s.clone())
-            .unwrap_or(Status::NotConfigured)
-    }
+pub fn current_status(s: &SharedState) -> Status {
+    s.status
+        .lock()
+        .map(|s| s.clone())
+        .unwrap_or(Status::NotConfigured)
 }
 
 /// 更新状态；仅在变化时向窗口发事件并刷新托盘
@@ -111,11 +111,3 @@ pub fn current_generation(state: &SharedState) -> u64 {
     state.tunnel_generation.load(std::sync::atomic::Ordering::SeqCst)
 }
 
-pub fn kill_child(state: &SharedState) {
-    if let Ok(mut guard) = state.child.lock() {
-        if let Some(child) = guard.as_mut() {
-            let _ = child.start_kill();
-        }
-        *guard = None;
-    }
-}

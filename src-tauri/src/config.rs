@@ -134,3 +134,96 @@ pub fn save(path: &Path, config: &AppConfig) -> Result<(), String> {
     }
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn ssh_args_include_forwards_and_auth() {
+        let cfg = AppConfig {
+            host: "your-server-ip".into(),
+            ssh_port: 2222,
+            ssh_user: "root".into(),
+            ssh_key_path: "/tmp/key".into(),
+            rest_port: 3111,
+            viewer_port: 3113,
+            ..Default::default()
+        };
+        let args = cfg.ssh_args();
+        let joined = args.join(" ");
+        assert!(joined.contains("-N"));
+        assert!(joined.contains("ExitOnForwardFailure=yes"));
+        assert!(joined.contains("BatchMode=yes"));
+        assert!(args.windows(2).any(|w| w == ["-i", "/tmp/key"]));
+        assert!(args.windows(2).any(|w| w == ["-p", "2222"]));
+        assert!(args.windows(2).any(|w| w == ["-L", "3111:localhost:3111"]));
+        assert!(args.windows(2).any(|w| w == ["-L", "3113:localhost:3113"]));
+        assert_eq!(args.last().map(String::as_str), Some("root@your-server-ip"));
+    }
+
+    #[test]
+    fn ssh_args_omit_key_when_empty() {
+        let cfg = AppConfig {
+            ssh_key_path: String::new(),
+            ..Default::default()
+        };
+        assert!(!cfg.ssh_args().contains(&"-i".to_string()));
+    }
+
+    #[test]
+    fn ssh_args_append_extra_args() {
+        let cfg = AppConfig {
+            extra_ssh_args: "-J jump@bastion".into(),
+            ..Default::default()
+        };
+        let args = cfg.ssh_args();
+        let pos_j = args.iter().position(|a| a == "-J").unwrap();
+        assert_eq!(args[pos_j + 1], "jump@bastion");
+        // 附加参数之后紧跟 user@host
+        let pos_host = args.iter().position(|a| a == "root@your-server-ip").unwrap();
+        assert_eq!(pos_j + 2, pos_host);
+    }
+
+    #[test]
+    fn validity_requires_host_and_token() {
+        assert!(!AppConfig::default().is_valid());
+        let mut cfg = AppConfig::default();
+        cfg.token = "t".into();
+        assert!(cfg.is_valid());
+        cfg.host = " ".into();
+        assert!(!cfg.is_valid());
+    }
+
+    #[test]
+    fn mcp_command_contains_url_token_agent() {
+        let cfg = AppConfig {
+            token: "secret".into(),
+            agent_name: "codex".into(),
+            ..Default::default()
+        };
+        let cmd = cfg.mcp_command();
+        assert!(cmd.contains("AGENTMEMORY_URL=http://localhost:3111"));
+        assert!(cmd.contains("AGENTMEMORY_SECRET=secret"));
+        assert!(cmd.contains("connect codex"));
+    }
+
+    #[test]
+    fn config_roundtrip_preserves_fields() {
+        let dir = std::env::temp_dir().join("amc-test-config");
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("config.json");
+        let cfg = AppConfig {
+            token: "tok".into(),
+            ssh_key_path: "/k".into(),
+            auto_start: true,
+            ..Default::default()
+        };
+        save(&path, &cfg).unwrap();
+        let loaded = load(&path);
+        assert_eq!(loaded.token, "tok");
+        assert_eq!(loaded.ssh_key_path, "/k");
+        assert!(loaded.auto_start);
+        assert_eq!(loaded.host, DEFAULT_HOST);
+    }
+}

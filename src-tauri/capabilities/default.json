@@ -8,6 +8,6 @@
     "opener:default",
     "dialog:default",
     "autostart:default",
-    "core:clipboard:allow-write-text"
+    "clipboard-manager:allow-write-text"
   ]
 }
