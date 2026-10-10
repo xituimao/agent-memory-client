@@ -14,10 +14,10 @@
       {
         "label": "main",
         "title": "Agent Memory",
-        "width": 360,
-        "height": 540,
-        "minWidth": 340,
-        "minHeight": 520,
+        "width": 340,
+        "height": 460,
+        "minWidth": 320,
+        "minHeight": 440,
         "resizable": true,
         "fullscreen": false,
         "visible": false

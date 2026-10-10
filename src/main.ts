@@ -36,7 +36,6 @@ const els = {
   heroStatus: $("heroStatus"),
   heroSub: $("heroSub"),
   btnPower: $("btnPower") as HTMLButtonElement,
-  powerLabel: $("powerLabel"),
   btnOpenSettings: $("btnOpenSettings") as HTMLButtonElement,
   btnBack: $("btnBack") as HTMLButtonElement,
   btnViewer: $("btnViewer") as HTMLButtonElement,
@@ -81,27 +80,22 @@ function renderStatus(s: Status) {
     els.heroStatus.textContent = "已连接";
     els.heroSub.textContent = currentConfig ? `${currentConfig.host} · ${s.latencyMs} ms` : `${s.latencyMs} ms`;
     els.btnPower.disabled = false;
-    els.powerLabel.textContent = "断开";
   } else if (s.state === "connecting") {
     els.heroStatus.textContent = "连接中…";
     els.heroSub.textContent = "正在建立加密隧道";
     els.btnPower.disabled = true;
-    els.powerLabel.textContent = "连接中";
   } else if (s.state === "offline") {
     els.heroStatus.textContent = "连接已断开";
     els.heroSub.textContent = s.detail + "，正在重连";
     els.btnPower.disabled = false;
-    els.powerLabel.textContent = "连接";
   } else if (s.state === "disconnected") {
     els.heroStatus.textContent = "未连接";
     els.heroSub.textContent = currentConfig ? currentConfig.host : "";
     els.btnPower.disabled = false;
-    els.powerLabel.textContent = "连接";
   } else {
     els.heroStatus.textContent = "需要配置";
     els.heroSub.textContent = "点击右上角齿轮完成设置";
     els.btnPower.disabled = false;
-    els.powerLabel.textContent = "连接";
   }
 
   // 状态环进度：在线满环、连接中旋转、其它低亮

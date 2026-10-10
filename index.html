@@ -17,21 +17,16 @@
         </header>
 
         <div class="hero" id="hero">
-          <div class="ring-wrap">
-            <svg class="ring" viewBox="0 0 200 200">
+          <button class="power-disc" id="btnPower" title="连接 / 断开">
+            <svg class="ring" viewBox="0 0 200 200" aria-hidden="true">
               <circle class="ring-bg" cx="100" cy="100" r="88" />
               <circle class="ring-fg" id="ringFg" cx="100" cy="100" r="88" />
             </svg>
-            <div class="hero-inner">
+            <span class="hero-inner">
               <span class="hero-status" id="heroStatus">载入中…</span>
               <span class="hero-sub" id="heroSub"></span>
-            </div>
-          </div>
-
-          <button class="power-btn" id="btnPower" title="连接 / 断开">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 3v8"/><path d="M6.3 6.3a8 8 0 1 0 11.4 0"/></svg>
+            </span>
           </button>
-          <span class="power-label" id="powerLabel">连接</span>
         </div>
 
         <footer class="home-links">
