@@ -47,35 +47,50 @@
 
         <div class="settings-body">
           <section class="card">
-            <h2>服务器</h2>
+            <h2>连接信息</h2>
             <label class="field">
               <span>服务器地址</span>
-              <input id="host" type="text" placeholder="your-server-ip" />
+              <input id="host" type="text" placeholder="例如 your-server-ip" />
             </label>
+            <label class="field">
+              <span>访问密钥</span>
+              <input id="token" type="password" placeholder="粘贴你的密钥" autocomplete="off" />
+            </label>
+            <p class="tip">
+              密钥怎么拿？在服务器上执行 <code>cat ~/.agentmemory/secret</code>，把输出整段粘贴到上面。
+            </p>
+          </section>
+
+          <section class="card switches">
+            <h2>启动方式</h2>
+            <label class="switch">
+              <input id="autoConnect" type="checkbox" />
+              <span>开机后自动连接</span>
+            </label>
+            <label class="switch">
+              <input id="autoStart" type="checkbox" />
+              <span>登录系统时自动启动本应用</span>
+            </label>
+          </section>
+
+          <details class="card">
+            <summary>高级设置<em class="hint" style="font-style:normal;color:var(--text-3);margin-left:6px;font-weight:400">一般无需修改</em></summary>
             <div class="grid-2">
-              <label class="field">
-                <span>SSH 端口</span>
-                <input id="sshPort" type="number" min="1" max="65535" value="22" />
-              </label>
               <label class="field">
                 <span>SSH 用户</span>
                 <input id="sshUser" type="text" placeholder="root" />
               </label>
+              <label class="field">
+                <span>SSH 端口</span>
+                <input id="sshPort" type="number" min="1" max="65535" value="22" />
+              </label>
             </div>
             <label class="field">
-              <span>SSH 私钥<em class="hint">留空用默认密钥</em></span>
+              <span>SSH 私钥<em class="hint">留空则用本机默认密钥</em></span>
               <div class="row">
                 <input id="sshKeyPath" type="text" placeholder="~/.ssh/id_ed25519" />
                 <button class="ghost-btn" id="btnPickKey">浏览…</button>
               </div>
-            </label>
-          </section>
-
-          <section class="card">
-            <h2>认证与端口</h2>
-            <label class="field">
-              <span>Bearer Token<em class="hint">服务器上 cat ~/.agentmemory/secret</em></span>
-              <input id="token" type="password" placeholder="AGENTMEMORY_SECRET" autocomplete="off" />
             </label>
             <div class="grid-2">
               <label class="field">
@@ -87,30 +102,15 @@
                 <input id="viewerPort" type="number" min="1" max="65535" value="3113" />
               </label>
             </div>
-          </section>
-
-          <details class="card">
-            <summary>高级</summary>
             <label class="field">
-              <span>Agent 名称<em class="hint">生成 MCP 命令用</em></span>
+              <span>Agent 名称<em class="hint">生成 MCP 接入命令用</em></span>
               <input id="agentName" type="text" placeholder="claude-code" />
             </label>
             <label class="field">
-              <span>附加 SSH 参数<em class="hint">空格分隔</em></span>
+              <span>附加 SSH 参数<em class="hint">空格分隔，懂再填</em></span>
               <input id="extraSshArgs" type="text" placeholder="如 -J jump@bastion" />
             </label>
           </details>
-
-          <section class="card switches">
-            <label class="switch">
-              <input id="autoConnect" type="checkbox" />
-              <span>启动时自动连接</span>
-            </label>
-            <label class="switch">
-              <input id="autoStart" type="checkbox" />
-              <span>登录系统时启动</span>
-            </label>
-          </section>
 
           <div class="settings-actions">
             <button class="secondary" id="btnTest">测试连接</button>
