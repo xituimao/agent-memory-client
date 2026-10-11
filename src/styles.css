@@ -481,3 +481,9 @@ button:disabled { opacity: 0.5; cursor: default; }
   margin-top: 14px;
   padding-left: 2px;
 }
+
+.hero-stats {
+  font-size: 11px;
+  color: var(--text-3);
+  margin-top: 2px;
+}

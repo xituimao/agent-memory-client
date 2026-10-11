@@ -2,6 +2,7 @@ mod agents;
 mod config;
 mod health;
 mod state;
+mod stats;
 mod tray;
 mod tunnel;
 

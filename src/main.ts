@@ -35,6 +35,7 @@ const els = {
   ringFg: $("ringFg") as unknown as SVGCircleElement,
   heroStatus: $("heroStatus"),
   heroSub: $("heroSub"),
+  heroStats: $("heroStats"),
   btnPower: $("btnPower") as HTMLButtonElement,
   btnOpenSettings: $("btnOpenSettings") as HTMLButtonElement,
   btnOpenGuide: $("btnOpenGuide") as HTMLButtonElement,
@@ -104,6 +105,7 @@ function renderStatus(s: Status) {
   } else if (s.state === "connecting") {
     els.heroStatus.textContent = "连接中…";
     els.heroSub.textContent = "正在建立加密隧道";
+    els.heroStats.textContent = "";
     els.btnPower.disabled = true;
   } else if (s.state === "offline") {
     els.heroStatus.textContent = "连接已断开";
@@ -272,6 +274,10 @@ interface GenericAgentInfo extends AgentInfo {
   manualNote?: string | null;
 }
 
+interface Stats {
+  todayMemories: number;
+}
+
 async function loadAgents() {
   els.agentList.innerHTML = '<p class="agent-desc" style="padding:8px 2px">正在扫描…</p>';
   els.genericList.innerHTML = "";
@@ -404,6 +410,9 @@ async function init() {
     fillForm(currentConfig);
     renderStatus(await invoke<Status>("get_status"));
     await listen<Status>("status-changed", (e) => renderStatus(e.payload));
+    await listen<Stats>("stats-changed", (e) => {
+      els.heroStats.textContent = `今日新增 ${e.payload.todayMemories} 条记忆`;
+    });
   } catch (e) {
     els.heroStatus.textContent = "载入失败";
     els.heroSub.textContent = String(e);
