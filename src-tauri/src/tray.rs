@@ -30,9 +30,9 @@ impl TrayState {
 
 pub fn build_tray(app: &AppHandle, status: &Status, auto_start: bool, auto_connect: bool) -> Result<(), tauri::Error> {
     let title = MenuItem::with_id(app, "status", status.label(), false, None::<&str>)?;
-    let open_viewer = MenuItem::with_id(app, "open-viewer", "打开记忆查看器", true, None::<&str>)?;
+    let open_viewer = MenuItem::with_id(app, "open-viewer", "浏览记忆", true, None::<&str>)?;
     let open_settings = MenuItem::with_id(app, "open-settings", "打开设置…", true, None::<&str>)?;
-    let copy_mcp = MenuItem::with_id(app, "copy-mcp", "复制 MCP 接入命令", true, None::<&str>)?;
+    let copy_mcp = MenuItem::with_id(app, "copy-mcp", "复制接入命令", true, None::<&str>)?;
     let autostart_item = CheckMenuItem::with_id(app, "toggle-autostart", "登录时启动", true, auto_start, None::<&str>)?;
     let autoconnect_item = CheckMenuItem::with_id(app, "toggle-autoconnect", "启动时自动连接", true, auto_connect, None::<&str>)?;
     let quit = MenuItem::with_id(app, "quit", "退出", true, None::<&str>)?;

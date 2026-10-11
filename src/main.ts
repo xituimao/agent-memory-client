@@ -190,7 +190,7 @@ els.btnCopy.addEventListener("click", async () => {
     const c = currentConfig ?? readForm();
     const cmd = `export AGENTMEMORY_URL=http://localhost:${c.restPort}\nexport AGENTMEMORY_SECRET=${c.token}\nnpx -y @agentmemory/agentmemory@latest connect ${c.agentName}`;
     await writeText(cmd);
-    toast("MCP 接入命令已复制");
+    toast("接入命令已复制，粘贴到终端执行");
   } catch (e) {
     toast(`复制失败：${e}`, false);
   }
