@@ -446,3 +446,8 @@ button:disabled { opacity: 0.5; cursor: default; }
 }
 .agent-msg.ok { color: var(--green-deep); }
 .agent-msg.err { color: var(--red); }
+
+.intro-tip {
+  font-size: 12px;
+  line-height: 1.7;
+}
