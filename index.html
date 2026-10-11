@@ -86,10 +86,17 @@
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
           </button>
           <h1>接入 AI 助手</h1>
+          <button class="icon-btn header-rescan" id="btnRescan" title="重新扫描">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><polyline points="21 3 21 9 15 9"/></svg>
+          </button>
         </header>
         <div class="settings-body">
-          <p class="tip">勾选安装后，该助手的记忆会自动存到你的服务器，换设备、换 AI 都记得你。</p>
+          <p class="tip">安装后，该助手的记忆自动存到你的服务器，换设备、换 AI 都记得你。</p>
           <div class="agent-list" id="agentList"></div>
+          <details class="agent-hidden" id="agentHidden">
+            <summary id="agentHiddenSummary">未检测到的助手</summary>
+            <div class="agent-list" id="agentHiddenList"></div>
+          </details>
         </div>
       </section>
 

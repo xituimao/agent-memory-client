@@ -450,3 +450,25 @@ button:disabled { opacity: 0.5; cursor: default; }
   line-height: 1.8;
   color: var(--text-2);
 }
+
+/* ============ 紧凑布局 + 隐藏未安装 ============ */
+
+.header-rescan { margin-left: auto; }
+
+.agent-row { padding: 9px 2px; }
+.agent-desc { margin-top: 1px; }
+
+.agent-hidden summary {
+  font-size: 11px;
+  color: var(--text-3);
+  cursor: pointer;
+  list-style: none;
+  padding: 10px 2px 6px;
+  user-select: none;
+}
+.agent-hidden summary::before { content: "▸ "; }
+.agent-hidden[open] summary::before { content: "▾ "; }
+.agent-hidden .agent-row { opacity: 0.75; }
+.agent-hidden .agent-row:first-child { border-top: 1px solid var(--border); }
+
+.settings-body > .tip { margin-bottom: 2px; }

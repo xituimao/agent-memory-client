@@ -42,6 +42,10 @@ const els = {
   btnAgents: $("btnAgents") as HTMLButtonElement,
   btnAgentsBack: $("btnAgentsBack") as HTMLButtonElement,
   agentList: $("agentList"),
+  agentHidden: $("agentHidden") as HTMLDetailsElement,
+  agentHiddenSummary: $("agentHiddenSummary"),
+  agentHiddenList: $("agentHiddenList"),
+  btnRescan: $("btnRescan") as HTMLButtonElement,
   viewGuide: $("viewGuide"),
   viewAgents: $("viewAgents"),
   btnBack: $("btnBack") as HTMLButtonElement,
@@ -264,17 +268,35 @@ interface AgentInfo {
 }
 
 async function loadAgents() {
-  els.agentList.innerHTML = '<p class="agent-desc" style="padding:8px 4px">正在扫描本机已安装的 AI 助手…</p>';
+  els.agentList.innerHTML = '<p class="agent-desc" style="padding:8px 2px">正在扫描…</p>';
+  els.agentHiddenList.innerHTML = "";
+  els.agentHidden.style.display = "none";
   try {
+    // 后端已排序：已安装的在前
     const list = await invoke<AgentInfo[]>("scan_agents");
     els.agentList.innerHTML = "";
+    let hidden = 0;
     for (const a of list) {
-      els.agentList.appendChild(renderAgentRow(a));
+      if (a.installed) {
+        els.agentList.appendChild(renderAgentRow(a));
+      } else {
+        hidden += 1;
+        els.agentHiddenList.appendChild(renderAgentRow(a));
+      }
+    }
+    if (hidden > 0) {
+      els.agentHiddenSummary.textContent = `未检测到的助手（${hidden}）`;
+      els.agentHidden.style.display = "";
+    }
+    if (!list.some((a) => a.installed)) {
+      els.agentList.innerHTML = '<p class="agent-desc" style="padding:8px 2px">没有检测到已安装的 AI 助手</p>';
     }
   } catch (e) {
     els.agentList.innerHTML = `<p class="agent-msg err">扫描失败：${e}</p>`;
   }
 }
+
+els.btnRescan.addEventListener("click", () => loadAgents());
 
 function renderAgentRow(a: AgentInfo): HTMLElement {
   const row = document.createElement("div");
