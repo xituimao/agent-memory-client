@@ -117,6 +117,142 @@ fn in_path(cmd: &str) -> bool {
     })
 }
 
+// ============ 通用 MCP 接入（官方 connect 名单之外的 MCP-capable 客户端） ============
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GenericAgentInfo {
+    pub id: String,
+    pub name: String,
+    pub description: String,
+    pub installed: bool,
+    /// 有值 = 暂不支持自动注入，展示提示文案（按钮禁用）
+    pub manual_note: Option<String>,
+}
+
+struct GenericDef {
+    id: &'static str,
+    name: &'static str,
+    description: &'static str,
+    cmd: &'static str,
+    app: Option<&'static str>,
+}
+
+/// 配置文件位置（按客户端区分，支持 Windows 路径差异）
+fn mcp_config_path(id: &str, home: &PathBuf) -> Option<PathBuf> {
+    match id {
+        // Kimi Code CLI：实测 ~/.kimi-code/mcp.json，标准 mcpServers 格式
+        "kimi" => Some(home.join(".kimi-code").join("mcp.json")),
+        // Claude Desktop
+        "claude-desktop" => {
+            #[cfg(target_os = "macos")]
+            {
+                Some(home.join("Library/Application Support/Claude/claude_desktop_config.json"))
+            }
+            #[cfg(not(target_os = "macos"))]
+            {
+                Some(home.join("AppData").join("Roaming").join("Claude").join("claude_desktop_config.json"))
+            }
+        }
+        _ => None,
+    }
+}
+
+const GENERIC_AGENTS: &[GenericDef] = &[
+    GenericDef { id: "kimi", name: "Kimi CLI", description: "Moonshot 终端 AI 助手", cmd: "kimi", app: Some("/Applications/Kimi Code.app") },
+    GenericDef { id: "claude-desktop", name: "Claude Desktop", description: "Anthropic 桌面应用", cmd: "", app: Some("/Applications/Claude.app") },
+];
+
+/// 已检测到、但 MCP 配置由应用自己管理、只能手动添加的客户端
+const MANUAL_ONLY: &[GenericDef] = &[
+    GenericDef { id: "workbuddy", name: "WorkBuddy", description: "腾讯 AI 办公助手", cmd: "", app: Some("/Applications/WorkBuddy.app") },
+];
+
+pub fn scan_generic() -> Vec<GenericAgentInfo> {
+    let mut list: Vec<GenericAgentInfo> = GENERIC_AGENTS
+        .iter()
+        .map(|def| GenericAgentInfo {
+            id: def.id.to_string(),
+            name: def.name.to_string(),
+            description: def.description.to_string(),
+            installed: generic_installed(def),
+            manual_note: None,
+        })
+        .collect();
+    for def in MANUAL_ONLY {
+        if generic_installed(def) {
+            list.push(GenericAgentInfo {
+                id: def.id.to_string(),
+                name: def.name.to_string(),
+                description: def.description.to_string(),
+                installed: true,
+                manual_note: Some(
+                    "该应用的 MCP 列表由它自己管理，请在其应用内的 MCP/插件设置中添加命令：npx -y @agentmemory/agentmemory@latest mcp（环境变量 AGENTMEMORY_URL=http://localhost:3111、AGENTMEMORY_SECRET=你的密钥）".to_string(),
+                ),
+            });
+        }
+    }
+    list.sort_by(|a, b| b.installed.cmp(&a.installed).then(a.name.cmp(&b.name)));
+    list
+}
+
+fn generic_installed(def: &GenericDef) -> bool {
+    #[cfg(target_os = "macos")]
+    if let Some(app) = def.app {
+        if PathBuf::from(app).exists() {
+            return true;
+        }
+    }
+    !def.cmd.is_empty() && in_path(def.cmd)
+}
+
+pub fn is_generic_supported(id: &str) -> bool {
+    GENERIC_AGENTS.iter().any(|d| d.id == id)
+}
+
+/// 向客户端的 MCP 配置文件注入 agentmemory（幂等：重复执行覆盖同名条目）
+pub fn install_generic(id: &str, rest_url: &str, token: &str) -> Result<String, String> {
+    if !is_generic_supported(id) {
+        return Err("不支持的客户端".to_string());
+    }
+    let home = home_dir().ok_or("无法确定用户目录")?;
+    let path = mcp_config_path(id, &home).ok_or("未知的配置路径")?;
+
+    // 读取现有配置（缺省视为空 mcpServers），合并 agentmemory 条目
+    let mut root: serde_json::Value = std::fs::read_to_string(&path)
+        .ok()
+        .and_then(|s| serde_json::from_str(&s).ok())
+        .unwrap_or_else(|| serde_json::json!({}));
+    let servers = root
+        .as_object_mut()
+        .ok_or("配置文件格式不是 JSON 对象")?
+        .entry("mcpServers")
+        .or_insert_with(|| serde_json::json!({}));
+    let servers = servers
+        .as_object_mut()
+        .ok_or("mcpServers 字段格式不正确")?;
+    servers.insert(
+        "agentmemory".to_string(),
+        serde_json::json!({
+            "command": "npx",
+            "args": ["-y", "@agentmemory/agentmemory@latest", "mcp"],
+            "env": { "AGENTMEMORY_URL": rest_url, "AGENTMEMORY_SECRET": token },
+        }),
+    );
+
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent).map_err(|e| format!("无法创建配置目录: {e}"))?;
+    }
+    let json = serde_json::to_string_pretty(&root).map_err(|e| e.to_string())?;
+    std::fs::write(&path, json).map_err(|e| format!("无法写入配置文件: {e}"))?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600));
+    }
+    Ok(format!("已写入 {}", path.display()))
+}
+
 /// 校验 id 合法（防止注入到 npx 命令）
 pub fn is_supported(id: &str) -> bool {
     AGENTS.iter().any(|d| d.id == id)

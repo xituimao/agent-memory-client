@@ -77,6 +77,25 @@ fn scan_agents() -> Vec<agents::AgentInfo> {
     agents::scan()
 }
 
+/// 扫描通用 MCP 客户端（官方 connect 名单之外的）
+#[tauri::command]
+fn scan_generic_agents() -> Vec<agents::GenericAgentInfo> {
+    agents::scan_generic()
+}
+
+/// 向通用客户端注入 agentmemory MCP 配置
+#[tauri::command]
+fn install_generic_agent(
+    state: tauri::State<'_, SharedState>,
+    id: String,
+) -> Result<String, String> {
+    let config = state::get_config(&state);
+    if config.token.trim().is_empty() {
+        return Err("请先在设置里填写访问密钥".to_string());
+    }
+    agents::install_generic(&id, &config.rest_url(), config.token.trim())
+}
+
 /// 给指定助手安装 MCP + SKILL（官方 connect 命令，逐个手动触发）
 #[tauri::command]
 async fn install_agent(
@@ -232,7 +251,9 @@ pub fn run() {
             connect_tunnel,
             disconnect_tunnel,
             scan_agents,
-            install_agent
+            install_agent,
+            scan_generic_agents,
+            install_generic_agent
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
