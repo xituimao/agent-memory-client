@@ -186,20 +186,22 @@ body {
   gap: 12px;
 }
 
+/* 内容优先：卡片退化为「分组」，无盒子，靠排版与留白组织 */
 .card {
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 14px 16px;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  padding: 0;
   display: flex;
   flex-direction: column;
   gap: 10px;
 }
 .card h2 {
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 600;
-  color: var(--text-2);
-  letter-spacing: 0.02em;
+  color: var(--text-3);
+  letter-spacing: 0.08em;
+  padding-left: 2px;
 }
 
 details.card summary {
@@ -244,10 +246,9 @@ input:focus {
 .tip {
   font-size: 12px;
   color: var(--text-2);
-  background: rgba(0, 122, 255, 0.07);
-  border-radius: 8px;
-  padding: 8px 10px;
-  line-height: 1.6;
+  border-left: 2px solid rgba(0, 122, 255, 0.5);
+  padding: 2px 0 2px 10px;
+  line-height: 1.7;
 }
 .tip code {
   font-family: "SF Mono", Menlo, monospace;
@@ -367,16 +368,15 @@ button:disabled { opacity: 0.5; cursor: default; }
 .guide-list li {
   counter-increment: step;
   position: relative;
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 14px 16px 14px 46px;
+  padding: 2px 2px 18px 40px;
+  border-bottom: 1px solid var(--border);
 }
+.guide-list li:last-child { border-bottom: none; }
 .guide-list li::before {
   content: counter(step);
   position: absolute;
-  left: 14px;
-  top: 14px;
+  left: 0;
+  top: 0;
   width: 22px;
   height: 22px;
   border-radius: 50%;
@@ -387,26 +387,24 @@ button:disabled { opacity: 0.5; cursor: default; }
   display: grid;
   place-items: center;
 }
-.guide-list strong { font-size: 13px; }
-.guide-list p { font-size: 12px; color: var(--text-2); margin-top: 4px; line-height: 1.6; }
+.guide-list strong { font-size: 13px; font-weight: 600; }
+.guide-list p { font-size: 12px; color: var(--text-2); margin-top: 3px; line-height: 1.7; }
 
 /* ============ 接入 AI 助手 ============ */
 
 .header-actions { display: flex; gap: 4px; }
 
-.agent-list { display: flex; flex-direction: column; gap: 10px; }
+.agent-list { display: flex; flex-direction: column; }
 
 .agent-row {
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 12px 14px;
+  padding: 13px 2px;
   display: flex;
   align-items: center;
   gap: 12px;
+  border-bottom: 1px solid var(--border);
 }
-.agent-row.done { border-color: rgba(48, 209, 88, 0.5); background: #f4fcf6; }
-.agent-row.failed { border-color: rgba(255, 69, 58, 0.5); background: #fdf4f3; }
+.agent-list .agent-row:first-child { border-top: 1px solid var(--border); }
+.agent-row.failed { border-bottom-color: rgba(255, 69, 58, 0.5); }
 
 .agent-meta { flex: 1; min-width: 0; }
 .agent-name { font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 6px; white-space: nowrap; }
@@ -449,5 +447,6 @@ button:disabled { opacity: 0.5; cursor: default; }
 
 .intro-tip {
   font-size: 12px;
-  line-height: 1.7;
+  line-height: 1.8;
+  color: var(--text-2);
 }
