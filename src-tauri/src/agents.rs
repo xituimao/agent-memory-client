@@ -135,7 +135,10 @@ struct GenericDef {
     name: &'static str,
     description: &'static str,
     cmd: &'static str,
-    app: Option<&'static str>,
+    /// macOS 应用候选路径（命中任一即算安装）
+    apps: &'static [&'static str],
+    /// VS Code / Cursor 扩展标识（可选）
+    ext: Option<&'static str>,
 }
 
 /// 配置文件位置（按客户端区分，支持 Windows 路径差异）
@@ -154,19 +157,33 @@ fn mcp_config_path(id: &str, home: &PathBuf) -> Option<PathBuf> {
                 Some(home.join("AppData").join("Roaming").join("Claude").join("claude_desktop_config.json"))
             }
         }
+        // Windsurf
+        "windsurf" => Some(home.join(".codeium").join("windsurf").join("mcp_config.json")),
         _ => None,
     }
 }
 
 const GENERIC_AGENTS: &[GenericDef] = &[
-    GenericDef { id: "kimi", name: "Kimi CLI", description: "Moonshot 终端 AI 助手", cmd: "kimi", app: Some("/Applications/Kimi Code.app") },
-    GenericDef { id: "claude-desktop", name: "Claude Desktop", description: "Anthropic 桌面应用", cmd: "", app: Some("/Applications/Claude.app") },
+    GenericDef { id: "kimi", name: "Kimi CLI", description: "月之暗面终端助手", cmd: "kimi", apps: &["/Applications/Kimi Code.app", "/Applications/Kimi.app"], ext: None },
+    GenericDef { id: "claude-desktop", name: "Claude Desktop", description: "Anthropic 桌面应用", cmd: "", apps: &["/Applications/Claude.app"], ext: None },
+    GenericDef { id: "windsurf", name: "Windsurf", description: "Codeium AI IDE", cmd: "", apps: &["/Applications/Windsurf.app"], ext: None },
 ];
 
 /// 已检测到、但 MCP 配置由应用自己管理、只能手动添加的客户端
+/// （2026 主流国内外工具，依据网络调研补充）
 const MANUAL_ONLY: &[GenericDef] = &[
-    GenericDef { id: "workbuddy", name: "WorkBuddy", description: "腾讯 AI 办公助手", cmd: "", app: Some("/Applications/WorkBuddy.app") },
+    GenericDef { id: "grok", name: "Grok CLI", description: "xAI 终端助手", cmd: "grok", apps: &[], ext: None },
+    GenericDef { id: "trae", name: "Trae", description: "字节 AI IDE", cmd: "trae", apps: &["/Applications/Trae.app", "/Applications/Trae CN.app"], ext: None },
+    GenericDef { id: "qoder", name: "Qoder", description: "阿里 AI IDE", cmd: "", apps: &["/Applications/Qoder.app", "/Applications/Qoder CN.app"], ext: None },
+    GenericDef { id: "codebuddy", name: "CodeBuddy", description: "腾讯编程助手", cmd: "codebuddy", apps: &[], ext: None },
+    GenericDef { id: "iflow", name: "iFlow CLI", description: "心流终端助手", cmd: "iflow", apps: &[], ext: None },
+    GenericDef { id: "goose", name: "Goose", description: "Block 开源助手", cmd: "goose", apps: &[], ext: None },
+    GenericDef { id: "roo-code", name: "Roo Code", description: "VS Code 编码助手", cmd: "", apps: &[], ext: Some("roo-cline") },
+    GenericDef { id: "kilo-code", name: "Kilo Code", description: "VS Code 编码助手", cmd: "", apps: &[], ext: Some("kilocode") },
+    GenericDef { id: "workbuddy", name: "WorkBuddy", description: "腾讯 AI 办公助手", cmd: "", apps: &["/Applications/WorkBuddy.app"], ext: None },
 ];
+
+const MANUAL_NOTE: &str = "该应用的 MCP 列表由它自己管理，请在应用内的 MCP/插件设置中添加：命令 npx -y @agentmemory/agentmemory@latest mcp，环境变量 AGENTMEMORY_URL=http://localhost:3111、AGENTMEMORY_SECRET=你的密钥";
 
 pub fn scan_generic() -> Vec<GenericAgentInfo> {
     let mut list: Vec<GenericAgentInfo> = GENERIC_AGENTS
@@ -186,9 +203,7 @@ pub fn scan_generic() -> Vec<GenericAgentInfo> {
                 name: def.name.to_string(),
                 description: def.description.to_string(),
                 installed: true,
-                manual_note: Some(
-                    "该应用的 MCP 列表由它自己管理，请在其应用内的 MCP/插件设置中添加命令：npx -y @agentmemory/agentmemory@latest mcp（环境变量 AGENTMEMORY_URL=http://localhost:3111、AGENTMEMORY_SECRET=你的密钥）".to_string(),
-                ),
+                manual_note: Some(MANUAL_NOTE.to_string()),
             });
         }
     }
@@ -197,9 +212,16 @@ pub fn scan_generic() -> Vec<GenericAgentInfo> {
 }
 
 fn generic_installed(def: &GenericDef) -> bool {
+    #[cfg(not(target_os = "macos"))]
+    let _ = def.apps;
     #[cfg(target_os = "macos")]
-    if let Some(app) = def.app {
+    for app in def.apps {
         if PathBuf::from(app).exists() {
+            return true;
+        }
+    }
+    if let Some(ext) = def.ext {
+        if has_vscode_ext(ext, &home_dir()) {
             return true;
         }
     }
