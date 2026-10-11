@@ -16,39 +16,36 @@ struct AgentDef {
     id: &'static str,
     name: &'static str,
     description: &'static str,
-    /// 判断是否已安装：配置目录 or PATH 中的可执行文件
-    dir: &'static str,
+    /// PATH 中的可执行文件（安装的决定性证据）
     cmd: &'static str,
     /// macOS 应用安装路径（可选）
     app: Option<&'static str>,
-    /// 次级配置目录（可选，兼容改名/发行版差异）
-    dir2: Option<&'static str>,
     /// VS Code / Cursor 扩展标识（可选，匹配扩展目录名）
     ext: Option<&'static str>,
 }
 
 /// 与官方 `agentmemory connect` 支持列表一致（connect --help 实测 21 个）
 const AGENTS: &[AgentDef] = &[
-    AgentDef { id: "claude-code", name: "Claude Code", description: "Anthropic 官方 CLI", dir: ".claude", cmd: "claude", app: None, dir2: None, ext: None },
-    AgentDef { id: "codex", name: "Codex CLI", description: "OpenAI 终端编码助手", dir: ".codex", cmd: "codex", app: None, dir2: None, ext: None },
-    AgentDef { id: "gemini-cli", name: "Gemini CLI", description: "Google 终端 AI 助手", dir: ".gemini", cmd: "gemini", app: None, dir2: None, ext: None },
-    AgentDef { id: "qwen", name: "Qwen Code", description: "通义千问终端编码助手", dir: ".qwen", cmd: "qwen", app: None, dir2: None, ext: None },
-    AgentDef { id: "copilot-cli", name: "Copilot CLI", description: "GitHub 终端助手", dir: ".config/gh", cmd: "gh", app: None, dir2: None, ext: None },
-    AgentDef { id: "cursor", name: "Cursor", description: "AI 代码编辑器", dir: ".cursor", cmd: "cursor", app: Some("/Applications/Cursor.app"), dir2: None, ext: None },
-    AgentDef { id: "cline", name: "Cline", description: "VS Code 编码助手", dir: ".cline", cmd: "", app: None, dir2: None, ext: Some("cline") },
-    AgentDef { id: "continue", name: "Continue", description: "开源 IDE 编码助手", dir: ".continue", cmd: "", app: None, dir2: None, ext: Some("continue") },
-    AgentDef { id: "zed", name: "Zed", description: "高性能代码编辑器", dir: ".zed", cmd: "zed", app: Some("/Applications/Zed.app"), dir2: None, ext: None },
-    AgentDef { id: "warp", name: "Warp", description: "AI 终端", dir: ".warp", cmd: "warp", app: Some("/Applications/Warp.app"), dir2: None, ext: None },
-    AgentDef { id: "kiro", name: "Kiro", description: "AWS AI IDE", dir: ".kiro", cmd: "kiro", app: None, dir2: None, ext: None },
-    AgentDef { id: "antigravity", name: "Antigravity", description: "Google AI IDE", dir: ".antigravity", cmd: "", app: Some("/Applications/Antigravity.app"), dir2: None, ext: None },
-    AgentDef { id: "devin", name: "Devin", description: "Cognition AI 工程师", dir: ".devin", cmd: "devin", app: None, dir2: None, ext: None },
-    AgentDef { id: "droid", name: "Droid", description: "Factory 终端工程师", dir: ".droid", cmd: "droid", app: None, dir2: None, ext: None },
-    AgentDef { id: "dsh", name: "DSH", description: "DeepSeek 终端助手", dir: ".dsh", cmd: "dsh", app: None, dir2: None, ext: None },
-    AgentDef { id: "opencode", name: "OpenCode", description: "开源终端 AI 编码工具", dir: ".config/opencode", cmd: "opencode", app: None, dir2: None, ext: None },
-    AgentDef { id: "openclaw", name: "OpenClaw", description: "开源 AI 助手框架", dir: ".openclaw", cmd: "openclaw", app: None, dir2: Some(".kimi_openclaw"), ext: None },
-    AgentDef { id: "hermes", name: "Hermes", description: "Nous Research 助手", dir: ".hermes", cmd: "hermes", app: None, dir2: None, ext: None },
-    AgentDef { id: "pi", name: "Pi", description: "Mario Zecher 极简助手", dir: ".pi", cmd: "pi", app: None, dir2: None, ext: None },
-    AgentDef { id: "openhuman", name: "OpenHuman", description: "开源个人 AI", dir: ".openhuman", cmd: "openhuman", app: None, dir2: None, ext: None },
+    AgentDef { id: "claude-code", name: "Claude Code", description: "Anthropic 官方 CLI", cmd: "claude", app: None, ext: None },
+    AgentDef { id: "codex", name: "Codex CLI", description: "OpenAI 终端编码助手", cmd: "codex", app: None, ext: None },
+    AgentDef { id: "gemini-cli", name: "Gemini CLI", description: "Google 终端 AI 助手", cmd: "gemini", app: None, ext: None },
+    AgentDef { id: "qwen", name: "Qwen Code", description: "通义千问终端编码助手", cmd: "qwen", app: None, ext: None },
+    AgentDef { id: "copilot-cli", name: "Copilot CLI", description: "GitHub 终端助手", cmd: "gh", app: None, ext: None },
+    AgentDef { id: "cursor", name: "Cursor", description: "AI 代码编辑器", cmd: "cursor", app: Some("/Applications/Cursor.app"), ext: None },
+    AgentDef { id: "cline", name: "Cline", description: "VS Code 编码助手", cmd: "", app: None, ext: Some("cline") },
+    AgentDef { id: "continue", name: "Continue", description: "开源 IDE 编码助手", cmd: "", app: None, ext: Some("continue") },
+    AgentDef { id: "zed", name: "Zed", description: "高性能代码编辑器", cmd: "zed", app: Some("/Applications/Zed.app"), ext: None },
+    AgentDef { id: "warp", name: "Warp", description: "AI 终端", cmd: "warp", app: Some("/Applications/Warp.app"), ext: None },
+    AgentDef { id: "kiro", name: "Kiro", description: "AWS AI IDE", cmd: "kiro", app: None, ext: None },
+    AgentDef { id: "antigravity", name: "Antigravity", description: "Google AI IDE", cmd: "", app: Some("/Applications/Antigravity.app"), ext: None },
+    AgentDef { id: "devin", name: "Devin", description: "Cognition AI 工程师", cmd: "devin", app: None, ext: None },
+    AgentDef { id: "droid", name: "Droid", description: "Factory 终端工程师", cmd: "droid", app: None, ext: None },
+    AgentDef { id: "dsh", name: "DSH", description: "DeepSeek 终端助手", cmd: "dsh", app: None, ext: None },
+    AgentDef { id: "opencode", name: "OpenCode", description: "开源终端 AI 编码工具", cmd: "opencode", app: None, ext: None },
+    AgentDef { id: "openclaw", name: "OpenClaw", description: "开源 AI 助手框架", cmd: "openclaw", app: None, ext: None },
+    AgentDef { id: "hermes", name: "Hermes", description: "Nous Research 助手", cmd: "hermes", app: None, ext: None },
+    AgentDef { id: "pi", name: "Pi", description: "Mario Zecher 极简助手", cmd: "pi", app: None, ext: None },
+    AgentDef { id: "openhuman", name: "OpenHuman", description: "开源个人 AI", cmd: "openhuman", app: None, ext: None },
 ];
 
 /// 扫描本机已安装的 agent 客户端；已安装的排前面，未安装的按名称排序垫底
@@ -73,17 +70,10 @@ fn home_dir() -> Option<PathBuf> {
         .map(PathBuf::from)
 }
 
+/// 已安装 = 可执行文件在 PATH / 应用 bundle 存在 / 编辑器扩展存在。
+///  deliberately 不用配置目录判断——目录可能是残留数据或被其他软件
+/// 捆绑运行时分产生（如 Kimi CLI 内置的 openclaw 运行时），会误报。
 fn is_installed(def: &AgentDef, home: &Option<PathBuf>) -> bool {
-    if let Some(home) = home {
-        if home.join(def.dir).exists() {
-            return true;
-        }
-        if let Some(dir2) = def.dir2 {
-            if home.join(dir2).exists() {
-                return true;
-            }
-        }
-    }
     #[cfg(target_os = "macos")]
     if let Some(app) = def.app {
         if PathBuf::from(app).exists() {
