@@ -38,6 +38,7 @@ const AGENTS: &[AgentDef] = &[
     AgentDef { id: "warp", name: "Warp", description: "AI 终端", cmd: "warp", app: Some("/Applications/Warp.app"), ext: None },
     AgentDef { id: "kiro", name: "Kiro", description: "AWS AI IDE", cmd: "kiro", app: None, ext: None },
     AgentDef { id: "antigravity", name: "Antigravity", description: "Google AI IDE", cmd: "", app: Some("/Applications/Antigravity.app"), ext: None },
+    AgentDef { id: "antigravity-cli", name: "Antigravity CLI", description: "Google 终端助手", cmd: "agy", app: None, ext: None },
     AgentDef { id: "devin", name: "Devin", description: "Cognition AI 工程师", cmd: "devin", app: None, ext: None },
     AgentDef { id: "droid", name: "Droid", description: "Factory 终端工程师", cmd: "droid", app: None, ext: None },
     AgentDef { id: "dsh", name: "DSH", description: "DeepSeek 终端助手", cmd: "dsh", app: None, ext: None },
