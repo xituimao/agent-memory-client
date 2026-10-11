@@ -6,6 +6,8 @@ use crate::config::AppConfig;
 #[serde(rename_all = "camelCase")]
 pub struct Stats {
     pub today_memories: u64,
+    /// 本机已接入 agentmemory 的客户端数（检查各客户端配置文件中是否有接入痕迹）
+    pub wired_clients: u64,
 }
 
 const PAGE_SIZE: &str = "200";
@@ -51,7 +53,12 @@ pub async fn count_today(client: &reqwest::Client, config: &AppConfig) -> Result
                     count += 1;
                     all_older = false;
                 }
-                Some(_) => return Ok(Stats { today_memories: count }),
+                Some(_) => {
+                    return Ok(Stats {
+                        today_memories: count,
+                        wired_clients: count_wired(),
+                    })
+                }
                 None => continue,
             }
         }
@@ -63,5 +70,42 @@ pub async fn count_today(client: &reqwest::Client, config: &AppConfig) -> Result
             break;
         }
     }
-    Ok(Stats { today_memories: count })
+    Ok(Stats {
+        today_memories: count,
+        wired_clients: count_wired(),
+    })
+}
+
+/// 已知客户端配置文件中可能出现 agentmemory 接入痕迹的位置
+const WIRED_CONFIG_CANDIDATES: &[&str] = &[
+    ".claude.json",
+    ".codex/config.toml",
+    ".gemini/settings.json",
+    ".qwen/settings.json",
+    ".cursor/mcp.json",
+    ".config/opencode/opencode.json",
+    ".config/goose/config.yaml",
+    ".kimi-code/mcp.json",
+    ".codeium/windsurf/mcp_config.json",
+    ".zed/settings.json",
+    "Library/Application Support/Claude/claude_desktop_config.json",
+];
+
+/// 统计本机已接入 agentmemory 的客户端数：配置文件存在且包含 agentmemory 标记
+pub fn count_wired() -> u64 {
+    let Some(home) = std::env::var_os("HOME")
+        .or_else(|| std::env::var_os("USERPROFILE"))
+        .map(std::path::PathBuf::from)
+    else {
+        return 0;
+    };
+    WIRED_CONFIG_CANDIDATES
+        .iter()
+        .filter(|rel| {
+            let path = home.join(rel);
+            std::fs::read_to_string(&path)
+                .map(|content| content.to_lowercase().contains("agentmemory"))
+                .unwrap_or(false)
+        })
+        .count() as u64
 }

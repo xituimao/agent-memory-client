@@ -276,6 +276,7 @@ interface GenericAgentInfo extends AgentInfo {
 
 interface Stats {
   todayMemories: number;
+  wiredClients: number;
 }
 
 async function loadAgents() {
@@ -411,7 +412,7 @@ async function init() {
     renderStatus(await invoke<Status>("get_status"));
     await listen<Status>("status-changed", (e) => renderStatus(e.payload));
     await listen<Stats>("stats-changed", (e) => {
-      els.heroStats.textContent = `今日新增 ${e.payload.todayMemories} 条记忆`;
+      els.heroStats.textContent = `今日 ${e.payload.todayMemories} 条 · 接入 ${e.payload.wiredClients} 个客户端`;
     });
   } catch (e) {
     els.heroStatus.textContent = "载入失败";
