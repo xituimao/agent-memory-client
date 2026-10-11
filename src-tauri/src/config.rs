@@ -97,6 +97,10 @@ impl AppConfig {
         args.push(format!("{}:localhost:{}", self.rest_port, self.rest_port));
         args.push("-L".to_string());
         args.push(format!("{}:localhost:{}", self.viewer_port, self.viewer_port));
+        // viewer 的实时数据走 WebSocket，端口默认为 viewer 端口 - 1（即文档中的 3112 streams）
+        let streams_port = self.viewer_port.saturating_sub(1);
+        args.push("-L".to_string());
+        args.push(format!("{}:localhost:{}", streams_port, streams_port));
         if !self.extra_ssh_args.trim().is_empty() {
             args.extend(self.extra_ssh_args.split_whitespace().map(str::to_string));
         }
@@ -159,6 +163,7 @@ mod tests {
         assert!(args.windows(2).any(|w| w == ["-p", "2222"]));
         assert!(args.windows(2).any(|w| w == ["-L", "3111:localhost:3111"]));
         assert!(args.windows(2).any(|w| w == ["-L", "3113:localhost:3113"]));
+        assert!(args.windows(2).any(|w| w == ["-L", "3112:localhost:3112"]));
         assert_eq!(args.last().map(String::as_str), Some("root@your-server-ip"));
     }
 
