@@ -354,3 +354,95 @@ button:disabled { opacity: 0.5; cursor: default; }
 }
 .toast.show { opacity: 1; transform: translate(-50%, 0); }
 .toast.err { background: rgba(200, 40, 34, 0.94); }
+
+/* ============ 使用指南 ============ */
+
+.guide-list {
+  list-style: none;
+  counter-reset: step;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.guide-list li {
+  counter-increment: step;
+  position: relative;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px 16px 14px 46px;
+}
+.guide-list li::before {
+  content: counter(step);
+  position: absolute;
+  left: 14px;
+  top: 14px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  display: grid;
+  place-items: center;
+}
+.guide-list strong { font-size: 13px; }
+.guide-list p { font-size: 12px; color: var(--text-2); margin-top: 4px; line-height: 1.6; }
+
+/* ============ 接入 AI 助手 ============ */
+
+.header-actions { display: flex; gap: 4px; }
+
+.agent-list { display: flex; flex-direction: column; gap: 10px; }
+
+.agent-row {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.agent-row.done { border-color: rgba(48, 209, 88, 0.5); background: #f4fcf6; }
+.agent-row.failed { border-color: rgba(255, 69, 58, 0.5); background: #fdf4f3; }
+
+.agent-meta { flex: 1; min-width: 0; }
+.agent-name { font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+.agent-desc { font-size: 11px; color: var(--text-3); margin-top: 2px; }
+
+.agent-badge {
+  font-size: 10px;
+  font-weight: 500;
+  padding: 2px 7px;
+  border-radius: 20px;
+  background: rgba(0, 0, 0, 0.06);
+  color: var(--text-2);
+  flex-shrink: 0;
+}
+.agent-badge.yes { background: rgba(48, 209, 88, 0.15); color: var(--green-deep); }
+
+.install-btn {
+  flex-shrink: 0;
+  background: var(--accent);
+  color: #fff;
+  font-size: 12px;
+  padding: 7px 10px;
+  border-radius: 8px;
+  white-space: nowrap;
+}
+.install-btn:hover:not(:disabled) { background: #0a84ff; }
+.install-btn:disabled { opacity: 0.55; cursor: default; }
+
+.agent-msg {
+  font-size: 11px;
+  margin-top: 6px;
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-height: 80px;
+  overflow-y: auto;
+  user-select: text;
+}
+.agent-msg.ok { color: var(--green-deep); }
+.agent-msg.err { color: var(--red); }

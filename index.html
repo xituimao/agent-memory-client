@@ -11,7 +11,11 @@
       <section class="view view-home" id="viewHome">
         <header class="home-header">
           <h1>Agent Memory</h1>
-          <button class="icon-btn" id="btnOpenSettings" title="设置">
+          <div class="header-actions">
+            <button class="icon-btn" id="btnOpenGuide" title="使用指南">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+            </button>
+            <button class="icon-btn" id="btnOpenSettings" title="设置">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h0a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h0a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v0a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
           </button>
         </header>
@@ -32,8 +36,58 @@
         <footer class="home-links">
           <button class="link-btn" id="btnViewer">浏览记忆</button>
           <span class="dot-sep">·</span>
+          <button class="link-btn" id="btnAgents">接入 AI 助手</button>
+          <span class="dot-sep">·</span>
           <button class="link-btn" id="btnCopy">复制接入命令</button>
         </footer>
+      </section>
+
+      <!-- ===== 使用指南 ===== -->
+      <section class="view view-guide hidden" id="viewGuide">
+        <header class="settings-header">
+          <button class="icon-btn" id="btnGuideBack" title="返回">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+          </button>
+          <h1>使用指南</h1>
+        </header>
+        <div class="settings-body">
+          <ol class="guide-list">
+            <li>
+              <strong>连接服务器</strong>
+              <p>点主界面的大圆盘，变绿就是连上了。红点是断开，再点一次即可重连。</p>
+            </li>
+            <li>
+              <strong>浏览记忆</strong>
+              <p>点主界面「浏览记忆」，在网页里实时查看记忆库：时间线、关系图谱、审计日志。</p>
+            </li>
+            <li>
+              <strong>接入 AI 助手</strong>
+              <p>点「接入 AI 助手」，给你在用的 AI 工具逐个点「安装」。装好后，它们的对话记忆会自动存到你的服务器，多个 AI、多台设备之间记忆互通。</p>
+            </li>
+            <li>
+              <strong>开机自动连接</strong>
+              <p>在设置里打开「开机后自动连接」，以后开机即用，无需再管。</p>
+            </li>
+            <li>
+              <strong>其他工具</strong>
+              <p>不在列表里的工具：点主界面「复制接入命令」，粘贴到终端执行即可。</p>
+            </li>
+          </ol>
+        </div>
+      </section>
+
+      <!-- ===== 接入 AI 助手 ===== -->
+      <section class="view view-agents hidden" id="viewAgents">
+        <header class="settings-header">
+          <button class="icon-btn" id="btnAgentsBack" title="返回">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+          </button>
+          <h1>接入 AI 助手</h1>
+        </header>
+        <div class="settings-body">
+          <p class="tip">勾选安装后，该助手的记忆会自动存到你的服务器，换设备、换 AI 都记得你。</p>
+          <div class="agent-list" id="agentList"></div>
+        </div>
       </section>
 
       <!-- ===== 设置 ===== -->

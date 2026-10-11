@@ -37,6 +37,13 @@ const els = {
   heroSub: $("heroSub"),
   btnPower: $("btnPower") as HTMLButtonElement,
   btnOpenSettings: $("btnOpenSettings") as HTMLButtonElement,
+  btnOpenGuide: $("btnOpenGuide") as HTMLButtonElement,
+  btnGuideBack: $("btnGuideBack") as HTMLButtonElement,
+  btnAgents: $("btnAgents") as HTMLButtonElement,
+  btnAgentsBack: $("btnAgentsBack") as HTMLButtonElement,
+  agentList: $("agentList"),
+  viewGuide: $("viewGuide"),
+  viewAgents: $("viewAgents"),
   btnBack: $("btnBack") as HTMLButtonElement,
   btnViewer: $("btnViewer") as HTMLButtonElement,
   btnCopy: $("btnCopy") as HTMLButtonElement,
@@ -65,9 +72,18 @@ let currentConfig: AppConfig | null = null;
 
 /* ---------- 视图切换 ---------- */
 
+type ViewName = "home" | "settings" | "guide" | "agents";
+
+function showView(name: ViewName) {
+  els.viewHome.classList.toggle("hidden", name !== "home");
+  els.viewSettings.classList.toggle("hidden", name !== "settings");
+  els.viewGuide.classList.toggle("hidden", name !== "guide");
+  els.viewAgents.classList.toggle("hidden", name !== "agents");
+  if (name === "agents") loadAgents();
+}
+
 function showSettings(show: boolean) {
-  els.viewHome.classList.toggle("hidden", show);
-  els.viewSettings.classList.toggle("hidden", !show);
+  showView(show ? "settings" : "home");
 }
 
 /* ---------- 状态渲染 ---------- */
@@ -153,8 +169,12 @@ function toast(msg: string, ok = true) {
 
 /* ---------- 事件 ---------- */
 
-els.btnOpenSettings.addEventListener("click", () => showSettings(true));
-els.btnBack.addEventListener("click", () => showSettings(false));
+els.btnOpenSettings.addEventListener("click", () => showView("settings"));
+els.btnBack.addEventListener("click", () => showView("home"));
+els.btnOpenGuide.addEventListener("click", () => showView("guide"));
+els.btnGuideBack.addEventListener("click", () => showView("home"));
+els.btnAgents.addEventListener("click", () => showView("agents"));
+els.btnAgentsBack.addEventListener("click", () => showView("home"));
 
 els.btnPower.addEventListener("click", async () => {
   const connected = currentStatus.state === "online";
@@ -233,6 +253,65 @@ els.btnSave.addEventListener("click", async () => {
     els.btnSave.disabled = false;
   }
 });
+
+/* ---------- 接入 AI 助手 ---------- */
+
+interface AgentInfo {
+  id: string;
+  name: string;
+  description: string;
+  installed: boolean;
+}
+
+async function loadAgents() {
+  els.agentList.innerHTML = '<p class="agent-desc" style="padding:8px 4px">正在扫描本机已安装的 AI 助手…</p>';
+  try {
+    const list = await invoke<AgentInfo[]>("scan_agents");
+    els.agentList.innerHTML = "";
+    for (const a of list) {
+      els.agentList.appendChild(renderAgentRow(a));
+    }
+  } catch (e) {
+    els.agentList.innerHTML = `<p class="agent-msg err">扫描失败：${e}</p>`;
+  }
+}
+
+function renderAgentRow(a: AgentInfo): HTMLElement {
+  const row = document.createElement("div");
+  row.className = "agent-row";
+  row.innerHTML = `
+    <div class="agent-meta">
+      <div class="agent-name">
+        ${a.name}
+        <span class="agent-badge ${a.installed ? "yes" : ""}">${a.installed ? "已安装" : "未检测到"}</span>
+      </div>
+      <div class="agent-desc">${a.description}</div>
+      <div class="agent-msg hidden"></div>
+    </div>
+    <button class="install-btn" ${a.installed ? "" : "disabled title='未检测到该助手，请先安装它'"}>安装 MCP + SKILL</button>`;
+  const btn = row.querySelector(".install-btn") as HTMLButtonElement;
+  const msg = row.querySelector(".agent-msg") as HTMLElement;
+  btn.addEventListener("click", async () => {
+    btn.disabled = true;
+    btn.textContent = "安装中…";
+    msg.className = "agent-msg";
+    msg.textContent = "";
+    try {
+      await invoke<string>("install_agent", { id: a.id });
+      row.classList.add("done");
+      btn.textContent = "已安装 ✓";
+      msg.classList.add("ok");
+      msg.textContent = "安装成功，该助手已接入记忆服务器。";
+    } catch (e) {
+      row.classList.add("failed");
+      btn.disabled = false;
+      btn.textContent = "重试";
+      msg.classList.add("err");
+      msg.textContent = String(e);
+    }
+  });
+  return row;
+}
 
 /* ---------- 初始化 ---------- */
 

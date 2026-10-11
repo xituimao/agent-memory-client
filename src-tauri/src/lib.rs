@@ -1,3 +1,4 @@
+mod agents;
 mod config;
 mod health;
 mod state;
@@ -68,6 +69,58 @@ async fn test_connection(config: config::AppConfig) -> Result<u64, String> {
         .build()
         .map_err(|e| e.to_string())?;
     health::probe(&client, &config).await
+}
+
+/// 扫描本机已安装的 AI 助手
+#[tauri::command]
+fn scan_agents() -> Vec<agents::AgentInfo> {
+    agents::scan()
+}
+
+/// 给指定助手安装 MCP + SKILL（官方 connect 命令，逐个手动触发）
+#[tauri::command]
+async fn install_agent(
+    state: tauri::State<'_, SharedState>,
+    id: String,
+) -> Result<String, String> {
+    if !agents::is_supported(&id) {
+        return Err("不支持的助手类型".to_string());
+    }
+    let config = state::get_config(&state);
+    if config.token.trim().is_empty() {
+        return Err("请先在设置里填写访问密钥".to_string());
+    }
+    // 需要隧道已建立，connect 要访问 localhost:3111
+    if !state.ssh_alive.load(std::sync::atomic::Ordering::SeqCst) {
+        return Err("请先连接服务器（圆盘点到绿色）".to_string());
+    }
+
+    let output = tokio::time::timeout(std::time::Duration::from_secs(180), async {
+        tokio::process::Command::new("npx")
+            .args(["-y", "@agentmemory/agentmemory@latest", "connect", &id])
+            .env("AGENTMEMORY_URL", config.rest_url())
+            .env("AGENTMEMORY_SECRET", config.token.trim())
+            .output()
+            .await
+    })
+    .await
+    .map_err(|_| "安装超时（180 秒）".to_string())?
+    .map_err(|e| format!("无法启动 npx：{e}（需要安装 Node.js）"))?;
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let tail = format!("{stdout}\n{stderr}")
+        .lines()
+        .filter(|l| !l.trim().is_empty())
+        .collect::<Vec<_>>()
+        .join("\n");
+    let tail: String = tail.chars().rev().take(600).collect::<String>().chars().rev().collect();
+
+    if output.status.success() {
+        Ok(tail)
+    } else {
+        Err(format!("安装失败（退出码 {:?}）：\n{tail}", output.status.code()))
+    }
 }
 
 /// VPN 式「连接」按钮：立即建隧道（无论启动自连开关）
@@ -177,7 +230,9 @@ pub fn run() {
             save_config,
             test_connection,
             connect_tunnel,
-            disconnect_tunnel
+            disconnect_tunnel,
+            scan_agents,
+            install_agent
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
