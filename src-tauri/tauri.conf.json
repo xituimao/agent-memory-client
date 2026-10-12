@@ -13,9 +13,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "Agent Memory",
-        "titleBarStyle": "Overlay",
-        "hiddenTitle": true,
+        "title": "",
         "width": 340,
         "height": 460,
         "minWidth": 320,

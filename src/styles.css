@@ -71,7 +71,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 30px 20px 0;
+  padding: 18px 20px 0;
 }
 .home-header h1 { font-size: 15px; font-weight: 600; }
 
@@ -202,7 +202,7 @@ body {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 30px 20px 12px;
+  padding: 18px 20px 12px;
 }
 .settings-header h1 { font-size: 15px; font-weight: 600; }
 
