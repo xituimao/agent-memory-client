@@ -322,9 +322,13 @@ pub fn install_generic(id: &str, rest_url: &str, token: &str) -> Result<String, 
     }
     let home = home_dir().ok_or("无法确定用户目录")?;
     let path = mcp_config_path(id, &home).ok_or("未知的配置路径")?;
+    inject_mcp_config(&path, rest_url, token)?;
+    Ok(format!("已写入 {}", path.display()))
+}
 
-    // 读取现有配置（缺省视为空 mcpServers），合并 agentmemory 条目
-    let mut root: serde_json::Value = std::fs::read_to_string(&path)
+/// 在指定 JSON 配置文件中合并 agentmemory MCP 条目（不存在则创建）
+fn inject_mcp_config(path: &PathBuf, rest_url: &str, token: &str) -> Result<(), String> {
+    let mut root: serde_json::Value = std::fs::read_to_string(path)
         .ok()
         .and_then(|s| serde_json::from_str(&s).ok())
         .unwrap_or_else(|| serde_json::json!({}));
@@ -349,13 +353,13 @@ pub fn install_generic(id: &str, rest_url: &str, token: &str) -> Result<String, 
         std::fs::create_dir_all(parent).map_err(|e| format!("无法创建配置目录: {e}"))?;
     }
     let json = serde_json::to_string_pretty(&root).map_err(|e| e.to_string())?;
-    std::fs::write(&path, json).map_err(|e| format!("无法写入配置文件: {e}"))?;
+    std::fs::write(path, json).map_err(|e| format!("无法写入配置文件: {e}"))?;
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
-        let _ = std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600));
+        let _ = std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600));
     }
-    Ok(format!("已写入 {}", path.display()))
+    Ok(())
 }
 
 /// 校验 id 合法（防止注入到 npx 命令）
@@ -374,48 +378,55 @@ pub fn inline_secret(id: &str, rest_url: &str, token: &str) -> Result<bool, Stri
         if !rel.ends_with(".json") {
             continue;
         }
-        let path = home.join(rel);
-        let Ok(text) = std::fs::read_to_string(&path) else { continue };
-        let Ok(mut root) = serde_json::from_str::<serde_json::Value>(&text) else { continue };
-        let Some(env) = root
-            .pointer_mut("/mcpServers/agentmemory/env")
-            .and_then(|e| e.as_object_mut())
-        else {
-            continue;
-        };
-        env.insert(
-            "AGENTMEMORY_URL".to_string(),
-            serde_json::Value::String(rest_url.to_string()),
-        );
-        env.insert(
-            "AGENTMEMORY_SECRET".to_string(),
-            serde_json::Value::String(token.to_string()),
-        );
-        // 其余 "${AGENTMEMORY_X:-default}" 占位符取默认值内联（如 TOOLS）
-        let keys: Vec<String> = env
-            .iter()
-            .filter(|(_, v)| v.as_str().map(|s| s.contains("${AGENTMEMORY")).unwrap_or(false))
-            .map(|(k, _)| k.clone())
-            .collect();
-        for key in keys {
-            let default = env[key.as_str()]
-                .as_str()
-                .and_then(|s| s.split(":-").nth(1))
-                .and_then(|s| s.strip_suffix('}'))
-                .unwrap_or("")
-                .to_string();
-            env.insert(key, serde_json::Value::String(default));
+        if inline_secret_in_file(&home.join(rel), rest_url, token)? {
+            changed = true;
         }
-        let json = serde_json::to_string_pretty(&root).map_err(|e| e.to_string())?;
-        std::fs::write(&path, json).map_err(|e| format!("无法写入 {}: {e}", path.display()))?;
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            let _ = std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600));
-        }
-        changed = true;
     }
     Ok(changed)
+}
+
+/// 单文件版本的占位符内联。
+/// 文件不存在 / 不是合法 JSON / 没有 agentmemory env → Ok(false)，不写盘。
+fn inline_secret_in_file(path: &PathBuf, rest_url: &str, token: &str) -> Result<bool, String> {
+    let Ok(text) = std::fs::read_to_string(path) else { return Ok(false) };
+    let Ok(mut root) = serde_json::from_str::<serde_json::Value>(&text) else { return Ok(false) };
+    let Some(env) = root
+        .pointer_mut("/mcpServers/agentmemory/env")
+        .and_then(|e| e.as_object_mut())
+    else {
+        return Ok(false);
+    };
+    env.insert(
+        "AGENTMEMORY_URL".to_string(),
+        serde_json::Value::String(rest_url.to_string()),
+    );
+    env.insert(
+        "AGENTMEMORY_SECRET".to_string(),
+        serde_json::Value::String(token.to_string()),
+    );
+    // 其余 "${AGENTMEMORY_X:-default}" 占位符取默认值内联（如 TOOLS）
+    let keys: Vec<String> = env
+        .iter()
+        .filter(|(_, v)| v.as_str().map(|s| s.contains("${AGENTMEMORY")).unwrap_or(false))
+        .map(|(k, _)| k.clone())
+        .collect();
+    for key in keys {
+        let default = env[key.as_str()]
+            .as_str()
+            .and_then(|s| s.split(":-").nth(1))
+            .and_then(|s| s.strip_suffix('}'))
+            .unwrap_or("")
+            .to_string();
+        env.insert(key, serde_json::Value::String(default));
+    }
+    let json = serde_json::to_string_pretty(&root).map_err(|e| e.to_string())?;
+    std::fs::write(path, json).map_err(|e| format!("无法写入 {}: {e}", path.display()))?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600));
+    }
+    Ok(true)
 }
 
 #[cfg(test)]
@@ -476,5 +487,101 @@ mod tests {
         std::fs::write(&file, r#"{"mcpServers":{"agentmemory":{"env":{"AGENTMEMORY_SECRET":"real"}}}}"#).unwrap();
         assert!(!has_placeholder_env(&home, "settings.json"));
         let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    fn tmpdir(tag: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("amc-{tag}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    #[test]
+    fn inject_mcp_config_creates_merges_and_is_idempotent() {
+        let dir = tmpdir("inject");
+        let path = dir.join("nested").join("mcp.json");
+
+        // 1. 文件与父目录都不存在 → 创建
+        inject_mcp_config(&path, "http://localhost:3111", "tok").unwrap();
+        let v: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+        assert_eq!(
+            v["mcpServers"]["agentmemory"]["env"]["AGENTMEMORY_SECRET"],
+            "tok"
+        );
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            assert_eq!(
+                std::fs::metadata(&path).unwrap().permissions().mode() & 0o777,
+                0o600
+            );
+        }
+
+        // 2. 已有其他 server → 合并而不是覆盖
+        inject_mcp_config(&path, "http://localhost:3111", "tok").unwrap();
+        let mut other: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+        other["mcpServers"]["other"] = serde_json::json!({"command": "x"});
+        std::fs::write(&path, serde_json::to_string(&other).unwrap()).unwrap();
+        inject_mcp_config(&path, "http://localhost:3111", "tok2").unwrap();
+        let merged: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+        assert!(merged["mcpServers"]["other"].is_object());
+        assert_eq!(
+            merged["mcpServers"]["agentmemory"]["env"]["AGENTMEMORY_SECRET"],
+            "tok2"
+        );
+
+        // 3. 幂等：重复执行内容一致
+        let before = std::fs::read_to_string(&path).unwrap();
+        inject_mcp_config(&path, "http://localhost:3111", "tok2").unwrap();
+        assert_eq!(before, std::fs::read_to_string(&path).unwrap());
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn inline_secret_replaces_all_placeholders() {
+        let dir = tmpdir("inline");
+        let path = dir.join("settings.json");
+        std::fs::write(
+            &path,
+            r#"{"mcpServers":{"agentmemory":{"env":{
+                "AGENTMEMORY_URL":"${AGENTMEMORY_URL:-http://localhost:3111}",
+                "AGENTMEMORY_SECRET":"${AGENTMEMORY_SECRET:-}",
+                "AGENTMEMORY_TOOLS":"${AGENTMEMORY_TOOLS:-all}"
+            }}}}"#,
+        )
+        .unwrap();
+
+        assert!(inline_secret_in_file(&path, "http://localhost:3111", "real-token").unwrap());
+        let v: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+        let env = &v["mcpServers"]["agentmemory"]["env"];
+        assert_eq!(env["AGENTMEMORY_URL"], "http://localhost:3111");
+        assert_eq!(env["AGENTMEMORY_SECRET"], "real-token");
+        assert_eq!(env["AGENTMEMORY_TOOLS"], "all");
+        assert!(!std::fs::read_to_string(&path).unwrap().contains("${AGENTMEMORY"));
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn inline_secret_noop_cases() {
+        let dir = tmpdir("inline-noop");
+        // 文件不存在
+        assert!(!inline_secret_in_file(&dir.join("nope.json"), "u", "t").unwrap());
+        // 非法 JSON
+        let bad = dir.join("bad.json");
+        std::fs::write(&bad, "not json").unwrap();
+        assert!(!inline_secret_in_file(&bad, "u", "t").unwrap());
+        // 没有 agentmemory 条目 → 不写盘
+        let other = dir.join("other.json");
+        let content = r#"{"mcpServers":{"x":{}}}"#;
+        std::fs::write(&other, content).unwrap();
+        assert!(!inline_secret_in_file(&other, "u", "t").unwrap());
+        assert_eq!(std::fs::read_to_string(&other).unwrap(), content);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

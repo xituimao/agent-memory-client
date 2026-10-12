@@ -3,6 +3,8 @@ mod config;
 mod health;
 mod state;
 mod stats;
+#[cfg(test)]
+mod testutil;
 mod tray;
 mod tunnel;
 

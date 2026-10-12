@@ -103,3 +103,45 @@ pub async fn probe(client: &reqwest::Client, config: &crate::config::AppConfig) 
     }
     Ok(started.elapsed().as_millis() as u64)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::AppConfig;
+
+    fn config_on(port: u16) -> AppConfig {
+        AppConfig {
+            rest_port: port,
+            token: "t".into(),
+            ..Default::default()
+        }
+    }
+
+    fn client() -> reqwest::Client {
+        reqwest::Client::builder()
+            .pool_max_idle_per_host(0)
+            .build()
+            .unwrap()
+    }
+
+    #[tokio::test]
+    async fn probe_ok_on_any_reachable_response() {
+        let port = crate::testutil::spawn_server(|_| (200, "{}".into()));
+        assert!(probe(&client(), &config_on(port)).await.is_ok());
+    }
+
+    #[tokio::test]
+    async fn probe_401_means_invalid_token() {
+        let port = crate::testutil::spawn_server(|_| (401, "{}".into()));
+        let err = probe(&client(), &config_on(port)).await.unwrap_err();
+        assert!(err.contains("Token 无效"), "unexpected: {err}");
+    }
+
+    #[tokio::test]
+    async fn probe_refused_means_server_down() {
+        let err = probe(&client(), &config_on(crate::testutil::unused_port()))
+            .await
+            .unwrap_err();
+        assert_eq!(err, "服务器无响应");
+    }
+}

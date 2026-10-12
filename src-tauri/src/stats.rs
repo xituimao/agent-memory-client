@@ -80,3 +80,80 @@ pub async fn count_today(client: &reqwest::Client, config: &AppConfig) -> Result
 pub fn count_wired() -> u64 {
     crate::agents::wired_count()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::AppConfig;
+    use std::sync::Mutex;
+
+    fn config_on(port: u16) -> AppConfig {
+        AppConfig {
+            rest_port: port,
+            token: "t".into(),
+            ..Default::default()
+        }
+    }
+
+    fn client() -> reqwest::Client {
+        reqwest::Client::builder()
+            .pool_max_idle_per_host(0)
+            .build()
+            .unwrap()
+    }
+
+    fn rfc3339(days_ago: i64) -> String {
+        (chrono::Local::now() - chrono::Duration::days(days_ago)).to_rfc3339()
+    }
+
+    fn mem(days_ago: i64) -> serde_json::Value {
+        serde_json::json!({"createdAt": rfc3339(days_ago), "id": format!("m{days_ago}")})
+    }
+
+    #[tokio::test]
+    async fn counts_today_and_stops_at_yesterday() {
+        let port = crate::testutil::spawn_server(move |_| {
+            let body = serde_json::json!({
+                "memories": [mem(0), mem(0), mem(1)],
+                "nextCursor": null
+            })
+            .to_string();
+            (200, body)
+        });
+        let stats = count_today(&client(), &config_on(port)).await.unwrap();
+        assert_eq!(stats.today_memories, 2);
+    }
+
+    #[tokio::test]
+    async fn paginates_until_older_memory() {
+        let calls = std::sync::Arc::new(Mutex::new(0u32));
+        let calls2 = calls.clone();
+        let port = crate::testutil::spawn_server(move |path| {
+            *calls2.lock().unwrap() += 1;
+            if path.contains("cursor=p2") {
+                (200, serde_json::json!({"memories": [mem(0), mem(2)], "nextCursor": null}).to_string())
+            } else {
+                (200, serde_json::json!({"memories": [mem(0), mem(0)], "nextCursor": "p2"}).to_string())
+            }
+        });
+        let stats = count_today(&client(), &config_on(port)).await.unwrap();
+        assert_eq!(stats.today_memories, 3);
+        assert_eq!(*calls.lock().unwrap(), 2);
+    }
+
+    #[tokio::test]
+    async fn empty_page_means_zero() {
+        let port = crate::testutil::spawn_server(|_| {
+            (200, serde_json::json!({"memories": [], "nextCursor": null}).to_string())
+        });
+        let stats = count_today(&client(), &config_on(port)).await.unwrap();
+        assert_eq!(stats.today_memories, 0);
+    }
+
+    #[tokio::test]
+    async fn missing_memories_field_is_error() {
+        let port = crate::testutil::spawn_server(|_| (200, "{}".into()));
+        let err = count_today(&client(), &config_on(port)).await.unwrap_err();
+        assert!(err.contains("memories"), "unexpected: {err}");
+    }
+}
