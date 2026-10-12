@@ -89,11 +89,11 @@ pub async fn probe(client: &reqwest::Client, config: &crate::config::AppConfig) 
         .await
         .map_err(|e| {
             if e.is_connect() {
-                "端口无响应".to_string()
+                "服务器无响应".to_string()
             } else if e.is_timeout() {
-                "请求超时".to_string()
+                "连接超时".to_string()
             } else {
-                format!("探活失败: {e}")
+                "连接失败".to_string()
             }
         })?;
     let status = resp.status();

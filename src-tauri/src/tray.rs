@@ -182,8 +182,8 @@ fn load_icon(_app: &AppHandle, status: &Status) -> tauri::image::Image<'static> 
     const RED: &[u8] = include_bytes!("../icons/tray-red-44.png");
     let bytes: &[u8] = match status {
         Status::Online { .. } => GREEN,
-        Status::Connecting => GRAY,
-        Status::Offline { .. } | Status::NotConfigured | Status::Disconnected => RED,
+        Status::Connecting | Status::Disconnected | Status::NotConfigured => GRAY,
+        Status::Offline { .. } => RED,
     };
     tauri::image::Image::from_bytes(bytes).expect("embedded tray icon must be valid PNG")
 }

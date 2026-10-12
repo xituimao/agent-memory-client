@@ -52,7 +52,7 @@ const els = {
   viewAgents: $("viewAgents"),
   btnBack: $("btnBack") as HTMLButtonElement,
   btnViewer: $("btnViewer") as HTMLButtonElement,
-  btnCopy: $("btnCopy") as HTMLButtonElement,
+  btnCopyAgentCmd: $("btnCopyAgentCmd") as HTMLButtonElement,
   // settings form
   host: $("host") as HTMLInputElement,
   sshPort: $("sshPort") as HTMLInputElement,
@@ -94,30 +94,45 @@ function showSettings(show: boolean) {
 
 /* ---------- 状态渲染 ---------- */
 
+let lastLatency: number | null = null;
+
 function renderStatus(s: Status) {
   currentStatus = s;
   els.hero.className = "hero " + s.state;
+  // 状态已刷新：丢弃 hover 暂存的旧状态词，避免 mouseleave 写回过期文案
+  delete els.btnPower.dataset.statusText;
 
   if (s.state === "online") {
     els.heroStatus.textContent = "已连接";
-    els.heroSub.textContent = currentConfig ? `${currentConfig.host} · ${s.latencyMs} ms` : `${s.latencyMs} ms`;
+    // 延迟跳变阈值化：变化 >15% 才刷新，避免盘心文字闪烁
+    if (lastLatency === null || Math.abs(s.latencyMs - lastLatency) / Math.max(lastLatency, 1) > 0.15) {
+      lastLatency = s.latencyMs;
+      els.heroSub.textContent = currentConfig ? `${currentConfig.host} · ${s.latencyMs} ms` : `${s.latencyMs} ms`;
+    }
     els.btnPower.disabled = false;
   } else if (s.state === "connecting") {
+    lastLatency = null;
     els.heroStatus.textContent = "连接中…";
-    els.heroSub.textContent = "正在建立加密隧道";
+    els.heroSub.textContent = "正在建立安全连接";
     els.heroStats.textContent = "";
     els.btnPower.disabled = true;
   } else if (s.state === "offline") {
+    lastLatency = null;
     els.heroStatus.textContent = "连接已断开";
-    els.heroSub.textContent = s.detail + "，正在重连";
+    els.heroSub.textContent = s.detail + "，正在自动重连";
+    els.heroStats.textContent = "";
     els.btnPower.disabled = false;
   } else if (s.state === "disconnected") {
+    lastLatency = null;
     els.heroStatus.textContent = "未连接";
     els.heroSub.textContent = currentConfig ? currentConfig.host : "";
+    els.heroStats.textContent = "";
     els.btnPower.disabled = false;
   } else {
+    lastLatency = null;
     els.heroStatus.textContent = "需要配置";
-    els.heroSub.textContent = "点击右上角齿轮完成设置";
+    els.heroSub.textContent = "点右上角齿轮完成设置";
+    els.heroStats.textContent = "";
     els.btnPower.disabled = false;
   }
 
@@ -183,6 +198,31 @@ els.btnGuideBack.addEventListener("click", () => showView("home"));
 els.btnAgents.addEventListener("click", () => showView("agents"));
 els.btnAgentsBack.addEventListener("click", () => showView("home"));
 
+/* ---------- hover 时状态词 ↔ 动作词：让圆盘的可点性可发现 ---------- */
+
+const HOVER_ACTION: Record<string, string> = {
+  online: "断开连接",
+  offline: "立即重连",
+  disconnected: "连接",
+  notConfigured: "打开设置",
+};
+
+els.btnPower.addEventListener("mouseenter", () => {
+  if (els.btnPower.disabled) return;
+  const action = HOVER_ACTION[currentStatus.state];
+  if (action && els.btnPower.dataset.statusText == null) {
+    els.btnPower.dataset.statusText = els.heroStatus.textContent ?? "";
+    els.heroStatus.textContent = action;
+  }
+});
+els.btnPower.addEventListener("mouseleave", () => {
+  const t = els.btnPower.dataset.statusText;
+  if (t != null) {
+    delete els.btnPower.dataset.statusText;
+    els.heroStatus.textContent = t;
+  }
+});
+
 els.btnPower.addEventListener("click", async () => {
   const connected = currentStatus.state === "online";
   if (currentStatus.state === "notConfigured") {
@@ -212,7 +252,7 @@ els.btnViewer.addEventListener("click", async () => {
   }
 });
 
-els.btnCopy.addEventListener("click", async () => {
+els.btnCopyAgentCmd.addEventListener("click", async () => {
   try {
     const c = currentConfig ?? readForm();
     const cmd = `export AGENTMEMORY_URL=http://localhost:${c.restPort}\nexport AGENTMEMORY_SECRET=${c.token}\nnpx -y @agentmemory/agentmemory@latest connect ${c.agentName}`;
@@ -413,7 +453,8 @@ async function init() {
     renderStatus(await invoke<Status>("get_status"));
     await listen<Status>("status-changed", (e) => renderStatus(e.payload));
     await listen<Stats>("stats-changed", (e) => {
-      els.heroStats.textContent = `今日 ${e.payload.todayMemories} 条 · 接入 ${e.payload.wiredClients} 个客户端`;
+      if (currentStatus.state !== "online") return;
+      els.heroStats.textContent = `今日 ${e.payload.todayMemories} 条 · 已接入 ${e.payload.wiredClients} 个助手`;
     });
   } catch (e) {
     els.heroStatus.textContent = "载入失败";
