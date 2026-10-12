@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { open } from "@tauri-apps/plugin-dialog";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
@@ -75,6 +76,20 @@ const RING_LEN = 2 * Math.PI * 88;
 
 let currentStatus: Status = { state: "connecting" };
 let currentConfig: AppConfig | null = null;
+
+/* ---------- 窗口拖拽 ---------- */
+
+// 显式拖拽：Tauri 的 data-tauri-drag-region 对 header 内的子元素（标题文字等）不生效，
+// 这里用 closest 兜住整块头部，并放行按钮等交互子元素
+document.querySelectorAll(".home-header, .settings-header, .hero").forEach((el) => {
+  el.addEventListener("mousedown", (ev) => {
+    const e = ev as MouseEvent;
+    if (e.button !== 0) return;
+    if ((e.target as HTMLElement).closest("button, a, input, summary")) return;
+    e.preventDefault();
+    getCurrentWindow().startDragging().catch(() => {});
+  });
+});
 
 /* ---------- 视图切换 ---------- */
 
