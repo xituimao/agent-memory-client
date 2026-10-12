@@ -21,6 +21,7 @@ interface AppConfig {
   viewerPort: number;
   token: string;
   extraSshArgs: string;
+  bypassProxy: boolean;
   autoConnect: boolean;
   autoStart: boolean;
   agentName: string;
@@ -62,6 +63,7 @@ const els = {
   viewerPort: $("viewerPort") as HTMLInputElement,
   token: $("token") as HTMLInputElement,
   extraSshArgs: $("extraSshArgs") as HTMLInputElement,
+  bypassProxy: $("bypassProxy") as HTMLInputElement,
   autoConnect: $("autoConnect") as HTMLInputElement,
   autoStart: $("autoStart") as HTMLInputElement,
   agentName: $("agentName") as HTMLInputElement,
@@ -159,6 +161,7 @@ function readForm(): AppConfig {
     viewerPort: Number(els.viewerPort.value) || 3113,
     token: els.token.value.trim(),
     extraSshArgs: els.extraSshArgs.value.trim(),
+    bypassProxy: els.bypassProxy.checked,
     autoConnect: els.autoConnect.checked,
     autoStart: els.autoStart.checked,
     agentName: els.agentName.value.trim() || "claude-code",
@@ -174,6 +177,7 @@ function fillForm(c: AppConfig) {
   els.viewerPort.value = String(c.viewerPort);
   els.token.value = c.token;
   els.extraSshArgs.value = c.extraSshArgs;
+  els.bypassProxy.checked = c.bypassProxy;
   els.autoConnect.checked = c.autoConnect;
   els.autoStart.checked = c.autoStart;
   els.agentName.value = c.agentName;

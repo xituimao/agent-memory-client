@@ -299,6 +299,13 @@ input:focus {
   font-size: 13px;
   cursor: pointer;
 }
+.switch .hint {
+  display: block;
+  font-style: normal;
+  color: var(--text-3);
+  font-size: 11px;
+  margin-top: 2px;
+}
 .switch input {
   appearance: none;
   width: 38px;

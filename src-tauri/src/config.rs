@@ -23,6 +23,10 @@ pub struct AppConfig {
     pub token: String,
     /// 附加 ssh 参数（空格分隔，原样追加）
     pub extra_ssh_args: String,
+    /// 绕过本机代理/VPN（TUN 模式会劫持默认路由，把 SSH 隧道送进代理链路，
+    /// 而代理节点普遍会掐断长连接）。开启后通过 BindInterface 绑定物理网卡直连。
+    /// 仅 macOS 生效。
+    pub bypass_proxy: bool,
     /// 应用启动时自动建立隧道
     pub auto_connect: bool,
     /// 登录系统时自动启动本应用
@@ -42,6 +46,7 @@ impl Default for AppConfig {
             viewer_port: 3113,
             token: String::new(),
             extra_ssh_args: String::new(),
+            bypass_proxy: true,
             auto_connect: true,
             auto_start: false,
             agent_name: "claude-code".to_string(),
@@ -75,6 +80,11 @@ impl AppConfig {
 
     /// 构造 `ssh -N` 隧道命令参数
     pub fn ssh_args(&self) -> Vec<String> {
+        self.ssh_args_with(detect_bypass_interface(self.bypass_proxy))
+    }
+
+    /// 与界面无关的参数构造；bind_interface 由调用方按平台探测结果注入
+    fn ssh_args_with(&self, bind_interface: Option<String>) -> Vec<String> {
         let mut args = vec![
             "-N".to_string(),
             "-T".to_string(),
@@ -88,6 +98,10 @@ impl AppConfig {
             "-o".to_string(),
             "BatchMode=yes".to_string(),
         ];
+        if let Some(iface) = bind_interface {
+            args.push("-o".to_string());
+            args.push(format!("BindInterface={iface}"));
+        }
         if !self.ssh_key_path.trim().is_empty() {
             args.push("-i".to_string());
             args.push(self.ssh_key_path.trim().to_string());
@@ -116,6 +130,36 @@ impl AppConfig {
 
 pub fn config_path(app_config_dir: &Path) -> PathBuf {
     app_config_dir.join("config.json")
+}
+
+/// 需要绕过时返回物理网卡名；开关关闭或非 macOS 返回 None
+fn detect_bypass_interface(enabled: bool) -> Option<String> {
+    if !enabled {
+        return None;
+    }
+    #[cfg(target_os = "macos")]
+    {
+        detect_physical_interface()
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        None
+    }
+}
+
+/// macOS：TUN 代理（v2rayN/sing-box/Clash 等）会劫持默认路由，
+/// 通过 `scutil --nwi` 找第一个带 IPv4 地址的物理网卡（en*），供 BindInterface 直连
+#[cfg(target_os = "macos")]
+fn detect_physical_interface() -> Option<String> {
+    let out = std::process::Command::new("scutil").arg("--nwi").output().ok()?;
+    let text = String::from_utf8_lossy(&out.stdout);
+    for line in text.lines() {
+        let name = line.split_whitespace().next().unwrap_or("");
+        if name.starts_with("en") && name.chars().all(|c| c.is_ascii_alphanumeric()) {
+            return Some(name.to_string());
+        }
+    }
+    None
 }
 
 pub fn load(path: &Path) -> AppConfig {
@@ -203,6 +247,28 @@ mod tests {
         assert!(cfg.is_valid());
         cfg.host = " ".into();
         assert!(!cfg.is_valid());
+    }
+
+    #[test]
+    fn ssh_args_bind_interface_only_when_bypassing() {
+        let cfg = AppConfig {
+            host: "example.com".into(),
+            bypass_proxy: true,
+            ..Default::default()
+        };
+        let args = cfg.ssh_args_with(Some("en7".into()));
+        assert!(args.windows(2).any(|w| w == ["-o", "BindInterface=en7"]));
+
+        let off = AppConfig {
+            host: "example.com".into(),
+            bypass_proxy: false,
+            ..Default::default()
+        };
+        assert!(detect_bypass_interface(off.bypass_proxy).is_none());
+
+        // 无探测结果（非 macOS / 探测失败）时不应出现该参数
+        let plain = cfg.ssh_args_with(None);
+        assert!(!plain.iter().any(|a| a.starts_with("BindInterface")));
     }
 
     #[test]
