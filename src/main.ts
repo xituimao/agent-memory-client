@@ -301,13 +301,14 @@ els.btnSave.addEventListener("click", async () => {
   }
 });
 
-/* ---------- 接入 AI 助手 ---------- */
+/* ---------- 接入 AI-Agent ---------- */
 
 interface AgentInfo {
   id: string;
   name: string;
   description: string;
   installed: boolean;
+  wired: boolean;
 }
 
 interface GenericAgentInfo extends AgentInfo {
@@ -338,7 +339,7 @@ async function loadAgents() {
       }
     }
     if (!list.some((a) => a.installed)) {
-      els.agentList.innerHTML = '<p class="agent-desc" style="padding:8px 2px">没有在本机检测到官方支持的 AI 助手</p>';
+      els.agentList.innerHTML = '<p class="agent-desc" style="padding:8px 2px">没有在本机检测到官方支持的 AI-Agent</p>';
     }
   } catch (e) {
     els.agentList.innerHTML = `<p class="agent-msg err">扫描失败：${e}</p>`;
@@ -371,13 +372,14 @@ function renderGenericRow(g: GenericAgentInfo, hidden = false): HTMLElement {
   const row = document.createElement("div");
   row.className = "agent-row";
   const manual = g.manualNote != null;
+  if (g.wired) row.classList.add("done");
   row.innerHTML = `
     <div class="agent-meta">
       <div class="agent-name">${g.name}</div>
-      <div class="agent-desc">${hidden ? g.description + " · 未在本机检测到" : manual ? g.description + " · 需在应用内手动添加" : g.description}</div>
+      <div class="agent-desc">${hidden ? g.description + " · 未在本机检测到" : manual && !g.wired ? g.description + " · 需在应用内手动添加" : g.description}</div>
       <div class="agent-msg hidden"></div>
     </div>
-    ${manual && g.installed ? '<button class="ghost-btn">复制命令</button>' : hidden ? "" : '<button class="install-btn">接入记忆</button>'}`;
+    ${g.wired && !hidden ? '<span class="wired-tag">已接入</span>' : manual && g.installed ? '<button class="ghost-btn">复制命令</button>' : hidden ? "" : '<button class="install-btn">接入记忆</button>'}`;
   const btn = row.querySelector(".install-btn") as HTMLButtonElement | null;
   const copyBtn = row.querySelector(".ghost-btn") as HTMLButtonElement | null;
   const msg = row.querySelector(".agent-msg") as HTMLElement;
@@ -418,13 +420,14 @@ els.btnRescan.addEventListener("click", () => loadAgents());
 function renderAgentRow(a: AgentInfo, hidden = false): HTMLElement {
   const row = document.createElement("div");
   row.className = "agent-row";
+  if (a.wired) row.classList.add("done");
   row.innerHTML = `
     <div class="agent-meta">
       <div class="agent-name">${a.name}</div>
       <div class="agent-desc">${hidden ? a.description + " · 未在本机检测到" : a.description}</div>
       <div class="agent-msg hidden"></div>
     </div>
-    ${hidden ? "" : '<button class="install-btn">接入记忆</button>'}`;
+    ${hidden ? "" : a.wired ? '<span class="wired-tag">已接入</span>' : '<button class="install-btn">接入记忆</button>'}`;
   const btn = row.querySelector(".install-btn") as HTMLButtonElement | null;
   const msg = row.querySelector(".agent-msg") as HTMLElement;
   if (!btn) return row;
@@ -460,7 +463,11 @@ async function init() {
     await listen<Status>("status-changed", (e) => renderStatus(e.payload));
     await listen<Stats>("stats-changed", (e) => {
       if (currentStatus.state !== "online") return;
-      els.heroStats.textContent = `今日 ${e.payload.todayMemories} 条 · 已接入 ${e.payload.wiredClients} 个助手`;
+      els.heroStats.textContent = `今日新增 ${e.payload.todayMemories} 条记忆`;
+      els.btnAgents.textContent =
+        e.payload.wiredClients > 0
+          ? `接入 AI-Agent · 已接入 ${e.payload.wiredClients}`
+          : "接入 AI-Agent";
     });
   } catch (e) {
     els.heroStatus.textContent = "载入失败";

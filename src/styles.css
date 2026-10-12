@@ -451,6 +451,15 @@ button:disabled { opacity: 0.5; cursor: default; }
 .install-btn:hover:not(:disabled) { background: var(--btn-hover); }
 .install-btn:disabled { opacity: 0.55; cursor: default; }
 
+.wired-tag {
+  flex-shrink: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ok);
+  padding: 7px 2px;
+  white-space: nowrap;
+}
+
 .agent-msg {
   font-size: 11px;
   margin-top: 6px;
