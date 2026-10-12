@@ -71,7 +71,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 18px 20px 0;
+  padding: 30px 20px 0;
 }
 .home-header h1 { font-size: 15px; font-weight: 600; }
 
@@ -202,7 +202,7 @@ body {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 18px 20px 12px;
+  padding: 30px 20px 12px;
 }
 .settings-header h1 { font-size: 15px; font-weight: 600; }
 
@@ -532,4 +532,9 @@ input:focus-visible {
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
+}
+
+/* 深色下 toast 与窗口背景拉不开层次，提亮 */
+@media (prefers-color-scheme: dark) {
+  .toast { background: rgba(64, 64, 67, 0.96); }
 }

@@ -374,16 +374,22 @@ function renderGenericRow(g: GenericAgentInfo, hidden = false): HTMLElement {
   row.innerHTML = `
     <div class="agent-meta">
       <div class="agent-name">${g.name}</div>
-      <div class="agent-desc">${hidden ? g.description + " · 未在本机检测到" : g.description}</div>
+      <div class="agent-desc">${hidden ? g.description + " · 未在本机检测到" : manual ? g.description + " · 需在应用内手动添加" : g.description}</div>
       <div class="agent-msg hidden"></div>
     </div>
-    ${manual || hidden ? "" : '<button class="install-btn">接入记忆</button>'}`;
+    ${manual && g.installed ? '<button class="ghost-btn">复制命令</button>' : hidden ? "" : '<button class="install-btn">接入记忆</button>'}`;
   const btn = row.querySelector(".install-btn") as HTMLButtonElement | null;
+  const copyBtn = row.querySelector(".ghost-btn") as HTMLButtonElement | null;
   const msg = row.querySelector(".agent-msg") as HTMLElement;
   if (manual && g.manualNote) {
-    msg.classList.remove("hidden");
-    msg.classList.add("note");
-    msg.textContent = g.manualNote;
+    copyBtn?.addEventListener("click", async () => {
+      try {
+        await writeText(g.manualNote!);
+        toast("命令与说明已复制，到应用内粘贴配置");
+      } catch (e) {
+        toast(`复制失败：${e}`, false);
+      }
+    });
     return row;
   }
   if (!btn) return row;
