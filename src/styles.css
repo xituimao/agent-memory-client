@@ -433,7 +433,7 @@ button:disabled { opacity: 0.5; cursor: default; }
 }
 .agent-msg.ok { color: var(--green-deep); }
 .agent-msg.err { color: var(--red); }
-.agent-msg.note { color: var(--text-3); }
+.agent-msg.note { color: var(--text-3); max-height: none; overflow: visible; }
 
 .intro-tip {
   font-size: 12px;
