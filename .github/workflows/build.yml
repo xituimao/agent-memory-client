@@ -56,6 +56,9 @@ jobs:
   build:
     needs: test
     if: startsWith(github.ref, 'refs/tags/')
+    # 新建仓库的 GITHUB_TOKEN 默认只读，tauri-action 创建 Release 需要写权限
+    permissions:
+      contents: write
     strategy:
       fail-fast: false
       matrix:
