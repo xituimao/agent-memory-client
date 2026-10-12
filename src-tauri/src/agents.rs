@@ -1,5 +1,5 @@
 use serde::Serialize;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 /// 受支持的 agent 客户端（与官方 `agentmemory connect` 支持的列表一致）
 #[derive(Clone, Debug, Serialize)]
@@ -122,16 +122,14 @@ fn home_dir() -> Option<PathBuf> {
 /// 捆绑运行时分产生（如 Kimi CLI 内置的 openclaw 运行时），会误报。
 fn is_installed(def: &AgentDef, home: &Option<PathBuf>) -> bool {
     #[cfg(target_os = "macos")]
-    if let Some(app) = def.app {
-        if PathBuf::from(app).exists() {
+    if let Some(app) = def.app
+        && PathBuf::from(app).exists() {
             return true;
         }
-    }
-    if let Some(ext) = def.ext {
-        if has_vscode_ext(ext, home) {
+    if let Some(ext) = def.ext
+        && has_vscode_ext(ext, home) {
             return true;
         }
-    }
     !def.cmd.is_empty() && in_path(def.cmd)
 }
 
@@ -178,7 +176,7 @@ fn is_alias_of_other(exe: &PathBuf, cmd: &str) -> bool {
     if stem == cmd.to_lowercase() {
         return false;
     }
-    known_cmds().iter().any(|c| *c == stem)
+    known_cmds().contains(&stem)
 }
 
 /// 所有受支持客户端的命令名集合（用于别名识别）
@@ -222,7 +220,7 @@ struct GenericDef {
 }
 
 /// 配置文件位置（按客户端区分，支持 Windows 路径差异）
-fn mcp_config_path(id: &str, home: &PathBuf) -> Option<PathBuf> {
+fn mcp_config_path(id: &str, home: &Path) -> Option<PathBuf> {
     match id {
         // Kimi Code CLI：实测 ~/.kimi-code/mcp.json，标准 mcpServers 格式
         "kimi" => Some(home.join(".kimi-code").join("mcp.json")),
@@ -303,11 +301,10 @@ fn generic_installed(def: &GenericDef) -> bool {
             return true;
         }
     }
-    if let Some(ext) = def.ext {
-        if has_vscode_ext(ext, &home_dir()) {
+    if let Some(ext) = def.ext
+        && has_vscode_ext(ext, &home_dir()) {
             return true;
         }
-    }
     !def.cmd.is_empty() && in_path(def.cmd)
 }
 

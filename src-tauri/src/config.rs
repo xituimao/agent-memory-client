@@ -195,9 +195,11 @@ mod tests {
     #[test]
     fn validity_requires_host_and_token() {
         assert!(!AppConfig::default().is_valid());
-        let mut cfg = AppConfig::default();
-        cfg.host = "example.com".into();
-        cfg.token = "t".into();
+        let mut cfg = AppConfig {
+            host: "example.com".into(),
+            token: "t".into(),
+            ..Default::default()
+        };
         assert!(cfg.is_valid());
         cfg.host = " ".into();
         assert!(!cfg.is_valid());

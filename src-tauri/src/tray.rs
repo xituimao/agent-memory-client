@@ -113,27 +113,24 @@ pub fn refresh_tray(app: &AppHandle, status: &Status) {
         let _ = tray.set_icon(Some(load_icon(app, status)));
     }
     drop(guard);
-    if let Ok(mut guard) = tray_state.title_item.lock() {
-        if let Some(item) = guard.as_mut() {
+    if let Ok(mut guard) = tray_state.title_item.lock()
+        && let Some(item) = guard.as_mut() {
             let _ = item.set_text(status.label());
         }
-    }
 }
 
 pub fn sync_checkboxes(app: &AppHandle) {
     let state = app.state::<crate::SharedState>();
     let config = st::get_config(&state);
     let tray_state = app.state::<TrayState>();
-    if let Ok(mut guard) = tray_state.autoconnect_item.lock() {
-        if let Some(item) = guard.as_mut() {
+    if let Ok(mut guard) = tray_state.autoconnect_item.lock()
+        && let Some(item) = guard.as_mut() {
             let _ = item.set_checked(config.auto_connect);
         }
-    }
-    if let Ok(mut guard) = tray_state.autostart_item.lock() {
-        if let Some(item) = guard.as_mut() {
+    if let Ok(mut guard) = tray_state.autostart_item.lock()
+        && let Some(item) = guard.as_mut() {
             let _ = item.set_checked(config.auto_start);
         }
-    }
 }
 
 pub fn set_autostart(app: &AppHandle, enable: bool) {
@@ -159,12 +156,11 @@ pub fn show_window(app: &AppHandle) {
         let _ = app.set_activation_policy(tauri::ActivationPolicy::Regular);
         // macOS 偶发把窗口恢复到极小尺寸（WKWebView 照常用逻辑尺寸渲染，
         // 视觉上就是"缩小版 UI"）。尺寸异常时拉回正常值。
-        if let Ok(size) = window.outer_size() {
-            if size.width < 320 || size.height < 440 {
+        if let Ok(size) = window.outer_size()
+            && (size.width < 320 || size.height < 440) {
                 let _ = window.set_size(tauri::LogicalSize::new(340.0, 460.0));
                 let _ = window.center();
             }
-        }
         let _ = window.show();
         let _ = window.unminimize();
         let _ = window.set_focus();

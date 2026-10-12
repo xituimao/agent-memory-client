@@ -1,14 +1,61 @@
-name: Build Release
+name: Release
 
-# 打 tag（如 v0.1.0）或手动触发，自动构建 macOS / Windows 安装包
+# 触发规则：
+#   1. 推送语义化版本 tag（如 v1.2.2）→ 先跑测试，全部通过后编译 macOS / Windows 安装包
+#   2. 手动触发（Actions 页 workflow_dispatch）→ 只跑测试，不编译、不发版
 on:
   push:
     tags:
-      - "v*"
+      - "v[0-9]+.[0-9]+.[0-9]+"
   workflow_dispatch:
 
 jobs:
+  # 自动化测试 + 代码检查（macOS 上跑，Tauri 依赖系统库）
+  test:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      # tag 必须是严格的语义化版本，且与 package.json 的 version 一致（发版前记得 bump）
+      - name: Validate release tag
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          echo "$TAG" | grep -qE '^v[0-9]+\.[0-9]+\.[0-9]+$' || { echo "::error::tag '$TAG' 不是语义化版本（应为 v1.2.2 形式）"; exit 1; }
+          PKG=$(node -p "require('./package.json').version")
+          [ "$TAG" = "v$PKG" ] || { echo "::error::tag '$TAG' 与 package.json version '$PKG' 不一致"; exit 1; }
+          echo "tag 校验通过: $TAG"
+
+      # 前端：依赖安装 + TypeScript 类型检查 + Vite 构建（npm run build = tsc && vite build）
+      - name: Frontend type-check & build
+        run: |
+          npm ci
+          npm run build
+
+      # Rust：单元测试 + 集成测试
+      - name: Rust tests
+        run: cargo test --manifest-path src-tauri/Cargo.toml --locked
+
+      # Rust 代码检查：任何 clippy 警告都视为失败
+      - name: Clippy (zero warnings)
+        run: cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --locked -- -D warnings
+
+  # 编译安装包：仅 tag 推送时执行，且必须等 test 通过
   build:
+    needs: test
+    if: startsWith(github.ref, 'refs/tags/')
     strategy:
       fail-fast: false
       matrix:
@@ -22,6 +69,10 @@ jobs:
           node-version: 22
 
       - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
 
       - name: Install frontend deps
         run: npm ci

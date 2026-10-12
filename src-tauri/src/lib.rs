@@ -287,11 +287,10 @@ pub fn run() {
         .run(|app_handle, event| {
             if let tauri::RunEvent::Exit = event {
                 // 显式回收 ssh 子进程；kill_on_drop 作为兜底
-                if let Ok(mut slot) = app_handle.state::<SharedState>().child.lock() {
-                    if let Some(mut child) = slot.take() {
+                if let Ok(mut slot) = app_handle.state::<SharedState>().child.lock()
+                    && let Some(mut child) = slot.take() {
                         let _ = child.start_kill();
                     }
-                }
             }
         });
 }
