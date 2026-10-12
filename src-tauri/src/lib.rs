@@ -227,8 +227,9 @@ pub fn run() {
                 if start_hidden {
                     let _ = window.hide();
                 } else {
-                    let _ = window.show();
-                    let _ = window.set_focus();
+                    // 直接双击启动时必须先提升为 Regular 再置前，
+                    // 否则 Accessory 后台启动会让 WKWebView 不渲染（白屏）
+                    tray::show_window(app.handle());
                 }
                 let window_clone = window.clone();
                 window.on_window_event(move |event| {
