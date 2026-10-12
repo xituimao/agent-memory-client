@@ -86,5 +86,5 @@ jobs:
         with:
           tagName: v__VERSION__
           releaseName: "Agent Memory v__VERSION__"
-          releaseDraft: true
+          releaseDraft: false
           prerelease: false

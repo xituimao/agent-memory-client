@@ -49,8 +49,12 @@ npm run tauri build    # 产出 macOS .dmg
 
 1. 先把 `package.json` 的 `version` bump 到新版本号（如 `1.2.2`），提交。
 2. 打同号 tag 并推送：`git tag v1.2.2 && git push origin v1.2.2`。
-3. GitHub Actions 自动执行：**测试门禁**（前端 tsc + Vite 构建、Rust 20 项测试、clippy 零警告）→ 全部通过后编译 macOS / Windows 安装包 → 生成 Release 草稿。
+3. GitHub Actions 自动执行：**测试门禁**（前端 tsc + Vite 构建、Rust 测试、clippy 零警告）→ 全部通过后编译 macOS / Windows 安装包 → 直接发布 Release。
 4. 普通 push 不触发编译；在 Actions 页手动运行 workflow 只跑测试。详见 `.github/workflows/build.yml`。
+
+## 许可证
+
+[Apache-2.0](LICENSE)
 
 ## 架构
 
@@ -116,7 +120,11 @@ npm run tauri dev      # dev mode with hot reload
 npm run tauri build    # produces the macOS .dmg
 ```
 
-Release (CI): bump `version` in `package.json`, then `git tag v1.2.2 && git push origin v1.2.2`. GitHub Actions runs the test gate (frontend tsc + Vite build, Rust tests, clippy with zero warnings) and, if green, builds the macOS / Windows installers into a draft Release. Plain pushes do not trigger builds; manual workflow runs only execute tests. See `.github/workflows/build.yml`.
+Release (CI): bump `version` in `package.json`, then `git tag v1.2.2 && git push origin v1.2.2`. GitHub Actions runs the test gate (frontend tsc + Vite build, Rust tests, clippy with zero warnings) and, if green, builds the macOS / Windows installers and publishes the Release. Plain pushes do not trigger builds; manual workflow runs only execute tests. See `.github/workflows/build.yml`.
+
+## License
+
+[Apache-2.0](LICENSE)
 
 ## Notes
 
