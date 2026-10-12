@@ -1,7 +1,8 @@
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
-pub const DEFAULT_HOST: &str = "your-server-ip";
+/// 默认服务器地址留空，强制用户在设置页填写自己的服务器
+pub const DEFAULT_HOST: &str = "";
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
@@ -146,7 +147,7 @@ mod tests {
     #[test]
     fn ssh_args_include_forwards_and_auth() {
         let cfg = AppConfig {
-            host: "your-server-ip".into(),
+            host: "example.com".into(),
             ssh_port: 2222,
             ssh_user: "root".into(),
             ssh_key_path: "/tmp/key".into(),
@@ -164,7 +165,7 @@ mod tests {
         assert!(args.windows(2).any(|w| w == ["-L", "3111:localhost:3111"]));
         assert!(args.windows(2).any(|w| w == ["-L", "3113:localhost:3113"]));
         assert!(args.windows(2).any(|w| w == ["-L", "3112:localhost:3112"]));
-        assert_eq!(args.last().map(String::as_str), Some("root@your-server-ip"));
+        assert_eq!(args.last().map(String::as_str), Some("root@example.com"));
     }
 
     #[test]
@@ -179,6 +180,7 @@ mod tests {
     #[test]
     fn ssh_args_append_extra_args() {
         let cfg = AppConfig {
+            host: "example.com".into(),
             extra_ssh_args: "-J jump@bastion".into(),
             ..Default::default()
         };
@@ -186,7 +188,7 @@ mod tests {
         let pos_j = args.iter().position(|a| a == "-J").unwrap();
         assert_eq!(args[pos_j + 1], "jump@bastion");
         // 附加参数之后紧跟 user@host
-        let pos_host = args.iter().position(|a| a == "root@your-server-ip").unwrap();
+        let pos_host = args.iter().position(|a| a == "root@example.com").unwrap();
         assert_eq!(pos_j + 2, pos_host);
     }
 
@@ -194,6 +196,7 @@ mod tests {
     fn validity_requires_host_and_token() {
         assert!(!AppConfig::default().is_valid());
         let mut cfg = AppConfig::default();
+        cfg.host = "example.com".into();
         cfg.token = "t".into();
         assert!(cfg.is_valid());
         cfg.host = " ".into();

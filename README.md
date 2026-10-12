@@ -24,7 +24,7 @@ agentmemory 服务器的极简桌面客户端：自动建立并维护 SSH 隧道
 
 | 配置项 | 说明 | 默认值 |
 |---|---|---|
-| 服务器地址 | SSH HostName | your-server-ip |
+| 服务器地址 | SSH HostName | 你自己的服务器 |
 | SSH 端口 / 用户 | 登录服务器的凭据 | 22 / root |
 | SSH 私钥路径 | 留空则使用默认密钥（ssh-agent / ~/.ssh/id_*） | 空 |
 | REST / Viewer 端口 | 本地转发端口，对应服务器 3111 / 3113 | 3111 / 3113 |
