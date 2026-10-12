@@ -407,19 +407,8 @@ button:disabled { opacity: 0.5; cursor: default; }
 .agent-row.failed { border-bottom-color: rgba(255, 69, 58, 0.5); }
 
 .agent-meta { flex: 1; min-width: 0; }
-.agent-name { font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+.agent-name { font-size: 13px; font-weight: 600; white-space: nowrap; }
 .agent-desc { font-size: 11px; color: var(--text-3); margin-top: 2px; }
-
-.agent-badge {
-  font-size: 10px;
-  font-weight: 500;
-  padding: 2px 7px;
-  border-radius: 20px;
-  background: rgba(0, 0, 0, 0.06);
-  color: var(--text-2);
-  flex-shrink: 0;
-}
-.agent-badge.yes { background: rgba(48, 209, 88, 0.15); color: var(--green-deep); }
 
 .install-btn {
   flex-shrink: 0;
@@ -444,6 +433,7 @@ button:disabled { opacity: 0.5; cursor: default; }
 }
 .agent-msg.ok { color: var(--green-deep); }
 .agent-msg.err { color: var(--red); }
+.agent-msg.note { color: var(--text-3); }
 
 .intro-tip {
   font-size: 12px;

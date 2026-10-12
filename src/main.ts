@@ -282,28 +282,23 @@ interface Stats {
 async function loadAgents() {
   els.agentList.innerHTML = '<p class="agent-desc" style="padding:8px 2px">正在扫描…</p>';
   els.genericList.innerHTML = "";
-  els.genericList.innerHTML = '<p class="agent-desc" style="padding:8px 2px">正在扫描…</p>';
   els.agentHiddenList.innerHTML = "";
   els.agentHidden.style.display = "none";
+  let hidden = 0;
   try {
-    // 后端已排序：已安装的在前
+    // 后端已排序：本机已装的在前
     const list = await invoke<AgentInfo[]>("scan_agents");
     els.agentList.innerHTML = "";
-    let hidden = 0;
     for (const a of list) {
       if (a.installed) {
         els.agentList.appendChild(renderAgentRow(a));
       } else {
         hidden += 1;
-        els.agentHiddenList.appendChild(renderAgentRow(a));
+        els.agentHiddenList.appendChild(renderAgentRow(a, true));
       }
     }
-    if (hidden > 0) {
-      els.agentHiddenSummary.textContent = `未检测到的助手（${hidden}）`;
-      els.agentHidden.style.display = "";
-    }
     if (!list.some((a) => a.installed)) {
-      els.agentList.innerHTML = '<p class="agent-desc" style="padding:8px 2px">没有检测到已安装的 AI 助手</p>';
+      els.agentList.innerHTML = '<p class="agent-desc" style="padding:8px 2px">没有在本机检测到官方支持的 AI 助手</p>';
     }
   } catch (e) {
     els.agentList.innerHTML = `<p class="agent-msg err">扫描失败：${e}</p>`;
@@ -313,44 +308,52 @@ async function loadAgents() {
     const generics = await invoke<GenericAgentInfo[]>("scan_generic_agents");
     els.genericList.innerHTML = "";
     for (const g of generics) {
-      els.genericList.appendChild(renderGenericRow(g));
+      if (g.installed) {
+        els.genericList.appendChild(renderGenericRow(g));
+      } else {
+        hidden += 1;
+        els.agentHiddenList.appendChild(renderGenericRow(g, true));
+      }
     }
-    if (generics.length === 0) {
-      els.genericList.innerHTML = '<p class="agent-desc" style="padding:4px 2px">没有检测到支持的 MCP 客户端</p>';
+    if (!generics.some((g) => g.installed)) {
+      els.genericList.innerHTML = '<p class="agent-desc" style="padding:4px 2px">没有在本机检测到支持的 MCP 客户端</p>';
     }
   } catch (e) {
     els.genericList.innerHTML = `<p class="agent-msg err">扫描失败：${e}</p>`;
   }
+  if (hidden > 0) {
+    els.agentHiddenSummary.textContent = `未在本机检测到（${hidden}）`;
+    els.agentHidden.style.display = "";
+  }
 }
 
-function renderGenericRow(g: GenericAgentInfo): HTMLElement {
+function renderGenericRow(g: GenericAgentInfo, hidden = false): HTMLElement {
   const row = document.createElement("div");
   row.className = "agent-row";
   const manual = g.manualNote != null;
   row.innerHTML = `
     <div class="agent-meta">
-      <div class="agent-name">
-        ${g.name}
-        <span class="agent-badge ${g.installed ? "yes" : ""}">${g.installed ? "已安装" : "未检测到"}</span>
-      </div>
-      <div class="agent-desc">${g.description}</div>
+      <div class="agent-name">${g.name}</div>
+      <div class="agent-desc">${hidden ? g.description + " · 未在本机检测到" : g.description}</div>
       <div class="agent-msg hidden"></div>
     </div>
-    <button class="install-btn" ${g.installed && !manual ? "" : "disabled"}>${manual ? "手动添加" : "安装 MCP"}</button>`;
-  const btn = row.querySelector(".install-btn") as HTMLButtonElement;
+    ${manual || hidden ? "" : '<button class="install-btn">接入记忆</button>'}`;
+  const btn = row.querySelector(".install-btn") as HTMLButtonElement | null;
   const msg = row.querySelector(".agent-msg") as HTMLElement;
   if (manual && g.manualNote) {
     msg.classList.remove("hidden");
+    msg.classList.add("note");
     msg.textContent = g.manualNote;
     return row;
   }
+  if (!btn) return row;
   btn.addEventListener("click", async () => {
     btn.disabled = true;
-    btn.textContent = "安装中…";
+    btn.textContent = "接入中…";
     try {
       const output = await invoke<string>("install_generic_agent", { id: g.id });
       row.classList.add("done");
-      btn.textContent = "已安装 ✓";
+      btn.textContent = "已接入 ✓";
       msg.classList.add("ok");
       msg.textContent = output;
     } catch (e) {
@@ -366,32 +369,30 @@ function renderGenericRow(g: GenericAgentInfo): HTMLElement {
 
 els.btnRescan.addEventListener("click", () => loadAgents());
 
-function renderAgentRow(a: AgentInfo): HTMLElement {
+function renderAgentRow(a: AgentInfo, hidden = false): HTMLElement {
   const row = document.createElement("div");
   row.className = "agent-row";
   row.innerHTML = `
     <div class="agent-meta">
-      <div class="agent-name">
-        ${a.name}
-        <span class="agent-badge ${a.installed ? "yes" : ""}">${a.installed ? "已安装" : "未检测到"}</span>
-      </div>
-      <div class="agent-desc">${a.description}</div>
+      <div class="agent-name">${a.name}</div>
+      <div class="agent-desc">${hidden ? a.description + " · 未在本机检测到" : a.description}</div>
       <div class="agent-msg hidden"></div>
     </div>
-    <button class="install-btn" ${a.installed ? "" : "disabled title='未检测到该助手，请先安装它'"}>安装 MCP + SKILL</button>`;
-  const btn = row.querySelector(".install-btn") as HTMLButtonElement;
+    ${hidden ? "" : '<button class="install-btn">接入记忆</button>'}`;
+  const btn = row.querySelector(".install-btn") as HTMLButtonElement | null;
   const msg = row.querySelector(".agent-msg") as HTMLElement;
+  if (!btn) return row;
   btn.addEventListener("click", async () => {
     btn.disabled = true;
-    btn.textContent = "安装中…";
+    btn.textContent = "接入中…";
     msg.className = "agent-msg";
     msg.textContent = "";
     try {
       await invoke<string>("install_agent", { id: a.id });
       row.classList.add("done");
-      btn.textContent = "已安装 ✓";
+      btn.textContent = "已接入 ✓";
       msg.classList.add("ok");
-      msg.textContent = "安装成功，该助手已接入记忆服务器。";
+      msg.textContent = "接入成功，该助手的记忆将自动同步到你的服务器。";
     } catch (e) {
       row.classList.add("failed");
       btn.disabled = false;
