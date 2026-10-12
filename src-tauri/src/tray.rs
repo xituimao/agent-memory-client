@@ -157,6 +157,14 @@ pub fn show_window(app: &AppHandle) {
         // Accessory 应用窗口可能无法前置/获焦，显示期间临时提升为 Regular
         #[cfg(target_os = "macos")]
         let _ = app.set_activation_policy(tauri::ActivationPolicy::Regular);
+        // macOS 偶发把窗口恢复到极小尺寸（WKWebView 照常用逻辑尺寸渲染，
+        // 视觉上就是"缩小版 UI"）。尺寸异常时拉回正常值。
+        if let Ok(size) = window.outer_size() {
+            if size.width < 320 || size.height < 440 {
+                let _ = window.set_size(tauri::LogicalSize::new(340.0, 460.0));
+                let _ = window.center();
+            }
+        }
         let _ = window.show();
         let _ = window.unminimize();
         let _ = window.set_focus();

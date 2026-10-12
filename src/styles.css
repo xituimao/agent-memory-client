@@ -450,6 +450,8 @@ button:disabled { opacity: 0.5; cursor: default; }
 }
 .install-btn:hover:not(:disabled) { background: var(--btn-hover); }
 .install-btn:disabled { opacity: 0.55; cursor: default; }
+.install-btn.repair { background: var(--red, #d70015); }
+.install-btn.repair:hover:not(:disabled) { background: var(--red, #d70015); filter: brightness(1.08); }
 
 .wired-tag {
   flex-shrink: 0;

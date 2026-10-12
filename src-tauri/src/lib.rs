@@ -137,6 +137,12 @@ async fn install_agent(
     let tail: String = tail.chars().rev().take(600).collect::<String>().chars().rev().collect();
 
     if output.status.success() {
+        // connect 可能写入 "${AGENTMEMORY_SECRET:-}" 这类占位符，
+        // 而多数客户端启动 MCP 时不做 shell 展开 → 推送全部 401。
+        // 这里把 env 内联为真实值兜底（尽力而为，失败不影响接入结果）。
+        if let Err(e) = agents::inline_secret(&id, &config.rest_url(), config.token.trim()) {
+            log::warn!("inline_secret failed for {id}: {e}");
+        }
         Ok(tail)
     } else {
         Err(format!("安装失败（退出码 {:?}）：\n{tail}", output.status.code()))
@@ -157,6 +163,22 @@ fn disconnect_tunnel(state: tauri::State<SharedState>) {
     state.manual_disconnect.store(true, std::sync::atomic::Ordering::SeqCst);
     state::bump_generation(&state);
     state.tunnel_notify.notify_one();
+}
+
+/// 修复已接入但密钥是占位符的客户端：把 env 内联为真实值
+#[tauri::command]
+fn repair_agent(state: tauri::State<'_, SharedState>, id: String) -> Result<String, String> {
+    if !agents::is_supported(&id) {
+        return Err("不支持的助手类型".to_string());
+    }
+    let config = state::get_config(&state);
+    if config.token.trim().is_empty() {
+        return Err("请先在设置里填写访问密钥".to_string());
+    }
+    match agents::inline_secret(&id, &config.rest_url(), config.token.trim())? {
+        true => Ok("已修复：密钥已写入配置，重启该助手后生效".to_string()),
+        false => Err("未找到可修复的配置文件".to_string()),
+    }
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -254,6 +276,7 @@ pub fn run() {
             disconnect_tunnel,
             scan_agents,
             install_agent,
+            repair_agent,
             scan_generic_agents,
             install_generic_agent
         ])

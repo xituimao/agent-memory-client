@@ -309,6 +309,7 @@ interface AgentInfo {
   description: string;
   installed: boolean;
   wired: boolean;
+  needsRepair: boolean;
 }
 
 interface GenericAgentInfo extends AgentInfo {
@@ -421,16 +422,42 @@ function renderAgentRow(a: AgentInfo, hidden = false): HTMLElement {
   const row = document.createElement("div");
   row.className = "agent-row";
   if (a.wired) row.classList.add("done");
+  const right = hidden
+    ? ""
+    : a.needsRepair
+      ? '<button class="install-btn repair">修复接入</button>'
+      : a.wired
+        ? '<span class="wired-tag">已接入</span>'
+        : '<button class="install-btn">接入记忆</button>';
   row.innerHTML = `
     <div class="agent-meta">
       <div class="agent-name">${a.name}</div>
-      <div class="agent-desc">${hidden ? a.description + " · 未在本机检测到" : a.description}</div>
+      <div class="agent-desc">${hidden ? a.description + " · 未在本机检测到" : a.needsRepair ? a.description + " · 密钥未生效，推送会被拒绝" : a.description}</div>
       <div class="agent-msg hidden"></div>
     </div>
-    ${hidden ? "" : a.wired ? '<span class="wired-tag">已接入</span>' : '<button class="install-btn">接入记忆</button>'}`;
+    ${right}`;
   const btn = row.querySelector(".install-btn") as HTMLButtonElement | null;
   const msg = row.querySelector(".agent-msg") as HTMLElement;
   if (!btn) return row;
+  if (a.needsRepair) {
+    btn.addEventListener("click", async () => {
+      btn.disabled = true;
+      btn.textContent = "修复中…";
+      try {
+        const out = await invoke<string>("repair_agent", { id: a.id });
+        msg.classList.add("ok");
+        msg.textContent = out;
+        btn.textContent = "已修复 ✓";
+        row.classList.add("done");
+      } catch (e) {
+        btn.disabled = false;
+        btn.textContent = "重试";
+        msg.classList.add("err");
+        msg.textContent = String(e);
+      }
+    });
+    return row;
+  }
   btn.addEventListener("click", async () => {
     btn.disabled = true;
     btn.textContent = "接入中…";

@@ -12,6 +12,8 @@ pub struct AgentInfo {
     pub installed: bool,
     /// 是否已接入 agentmemory（配置文件中检测到接入痕迹）
     pub wired: bool,
+    /// 已接入但 env 里是未展开的 "${AGENTMEMORY_*}" 占位符（推送会 401）
+    pub needs_repair: bool,
 }
 
 struct AgentDef {
@@ -34,7 +36,8 @@ const AGENTS: &[AgentDef] = &[
     AgentDef { id: "codex", name: "Codex CLI", description: "OpenAI 终端编码助手", cmd: "codex", app: None, ext: None, wired_paths: &[".codex/config.toml"] },
     AgentDef { id: "gemini-cli", name: "Gemini CLI", description: "Google 终端 AI 助手", cmd: "gemini", app: None, ext: None, wired_paths: &[".gemini/settings.json"] },
     AgentDef { id: "qwen", name: "Qwen Code", description: "通义千问终端编码助手", cmd: "qwen", app: None, ext: None, wired_paths: &[".qwen/settings.json"] },
-    AgentDef { id: "copilot-cli", name: "Copilot CLI", description: "GitHub 终端助手", cmd: "gh", app: None, ext: None, wired_paths: &[] },
+    // 注意：不能用 gh 判断——gh 是 GitHub CLI，装了它不等于装了 Copilot CLI
+    AgentDef { id: "copilot-cli", name: "Copilot CLI", description: "GitHub 终端助手", cmd: "copilot", app: None, ext: None, wired_paths: &[] },
     AgentDef { id: "cursor", name: "Cursor", description: "AI 代码编辑器", cmd: "cursor", app: Some("/Applications/Cursor.app"), ext: None, wired_paths: &[".cursor/mcp.json"] },
     AgentDef { id: "cline", name: "Cline", description: "VS Code 编码助手", cmd: "", app: None, ext: Some("cline"), wired_paths: &[] },
     AgentDef { id: "continue", name: "Continue", description: "开源 IDE 编码助手", cmd: "", app: None, ext: Some("continue"), wired_paths: &[".continue/config.json"] },
@@ -67,6 +70,10 @@ pub fn scan() -> Vec<AgentInfo> {
                 .wired_paths
                 .iter()
                 .any(|rel| has_wire_marker(&home, rel)),
+            needs_repair: def
+                .wired_paths
+                .iter()
+                .any(|rel| has_placeholder_env(&home, rel)),
         })
         .collect();
     list.sort_by(|a, b| b.installed.cmp(&a.installed).then(a.name.cmp(&b.name)));
@@ -78,6 +85,14 @@ fn has_wire_marker(home: &Option<PathBuf>, rel: &str) -> bool {
     let Some(home) = home else { return false };
     std::fs::read_to_string(home.join(rel))
         .map(|content| content.to_lowercase().contains("agentmemory"))
+        .unwrap_or(false)
+}
+
+/// 配置文件中 agentmemory 的 env 是否含未展开的 "${AGENTMEMORY_*}" 占位符
+fn has_placeholder_env(home: &Option<PathBuf>, rel: &str) -> bool {
+    let Some(home) = home else { return false };
+    std::fs::read_to_string(home.join(rel))
+        .map(|content| content.contains("${AGENTMEMORY"))
         .unwrap_or(false)
 }
 
@@ -348,6 +363,61 @@ pub fn is_supported(id: &str) -> bool {
     AGENTS.iter().any(|d| d.id == id)
 }
 
+/// connect 成功后把客户端 JSON 配置里 agentmemory 的 env 占位符
+/// （如 "${AGENTMEMORY_SECRET:-}"，多数客户端不会展开）替换为真实值。
+/// 只处理 JSON 配置；返回是否发生了修改。
+pub fn inline_secret(id: &str, rest_url: &str, token: &str) -> Result<bool, String> {
+    let def = AGENTS.iter().find(|d| d.id == id).ok_or("不支持的助手类型")?;
+    let Some(home) = home_dir() else { return Ok(false) };
+    let mut changed = false;
+    for rel in def.wired_paths {
+        if !rel.ends_with(".json") {
+            continue;
+        }
+        let path = home.join(rel);
+        let Ok(text) = std::fs::read_to_string(&path) else { continue };
+        let Ok(mut root) = serde_json::from_str::<serde_json::Value>(&text) else { continue };
+        let Some(env) = root
+            .pointer_mut("/mcpServers/agentmemory/env")
+            .and_then(|e| e.as_object_mut())
+        else {
+            continue;
+        };
+        env.insert(
+            "AGENTMEMORY_URL".to_string(),
+            serde_json::Value::String(rest_url.to_string()),
+        );
+        env.insert(
+            "AGENTMEMORY_SECRET".to_string(),
+            serde_json::Value::String(token.to_string()),
+        );
+        // 其余 "${AGENTMEMORY_X:-default}" 占位符取默认值内联（如 TOOLS）
+        let keys: Vec<String> = env
+            .iter()
+            .filter(|(_, v)| v.as_str().map(|s| s.contains("${AGENTMEMORY")).unwrap_or(false))
+            .map(|(k, _)| k.clone())
+            .collect();
+        for key in keys {
+            let default = env[key.as_str()]
+                .as_str()
+                .and_then(|s| s.split(":-").nth(1))
+                .and_then(|s| s.strip_suffix('}'))
+                .unwrap_or("")
+                .to_string();
+            env.insert(key, serde_json::Value::String(default));
+        }
+        let json = serde_json::to_string_pretty(&root).map_err(|e| e.to_string())?;
+        std::fs::write(&path, json).map_err(|e| format!("无法写入 {}: {e}", path.display()))?;
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let _ = std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600));
+        }
+        changed = true;
+    }
+    Ok(changed)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -387,6 +457,24 @@ mod tests {
             assert!(is_alias_of_other(&alias, "gemini"));
             assert!(!is_alias_of_other(&real, "agy"));
         }
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    #[test]
+    fn placeholder_env_detected() {
+        let tmp = std::env::temp_dir().join(format!("amc-placeholder-test-{}", std::process::id()));
+        std::fs::create_dir_all(&tmp).unwrap();
+        let home = Some(tmp.clone());
+        let file = tmp.join("settings.json");
+        std::fs::write(
+            &file,
+            r#"{"mcpServers":{"agentmemory":{"env":{"AGENTMEMORY_SECRET":"${AGENTMEMORY_SECRET:-}"}}}}"#,
+        )
+        .unwrap();
+        assert!(has_wire_marker(&home, "settings.json"));
+        assert!(has_placeholder_env(&home, "settings.json"));
+        std::fs::write(&file, r#"{"mcpServers":{"agentmemory":{"env":{"AGENTMEMORY_SECRET":"real"}}}}"#).unwrap();
+        assert!(!has_placeholder_env(&home, "settings.json"));
         let _ = std::fs::remove_dir_all(&tmp);
     }
 }
