@@ -6,7 +6,9 @@ use tauri::{AppHandle, Emitter};
 use crate::state::{self, SharedState, Status};
 
 const POLL_INTERVAL: Duration = Duration::from_secs(3);
-const PROBE_TIMEOUT: Duration = Duration::from_secs(2);
+/// 跨洲 SSH 隧道的实测 RTT 在 1.2–3.3s 且尖峰可超 8s，超时必须放宽，
+/// 否则约半数探活包超时，状态在「已连接 / 连接超时」间反复横跳
+const PROBE_TIMEOUT: Duration = Duration::from_secs(10);
 /// Online 状态事件的最小发送间隔，避免每 3s 抖动托盘图标与事件
 const ONLINE_EMIT_INTERVAL: Duration = Duration::from_secs(10);
 /// 今日新增记忆统计的轮询间隔
@@ -68,9 +70,10 @@ pub async fn health_loop(app: AppHandle, state: SharedState) {
             }
             Err(detail) => {
                 fail_streak += 1;
-                // 刚拉起隧道时服务可能还没就绪，容忍前 2 次失败（约 6s 宽限）
-                let current = state::current_status(&state);
-                if fail_streak > 2 || matches!(current, Status::Online { .. }) {
+                // 连续失败才判离线：高延迟链路上单次超时不代表服务不可用，
+                // 在线状态下也要容忍抖动，避免「死活连不上」式的状态横跳。
+                // 刚拉起隧道时服务可能还没就绪，同样给前几次失败宽限。
+                if fail_streak >= 3 {
                     state::set_status(&app, &state, Status::Offline { detail });
                 }
             }

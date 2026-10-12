@@ -13,6 +13,8 @@ pub struct Stats {
 const PAGE_SIZE: &str = "200";
 /// 分页上限：超过 2000 条最近记忆时停止翻页（防止极端情况下请求过多）
 const MAX_PAGES: usize = 10;
+/// 单次分页请求超时：与探活同理，跨洲隧道 RTT 尖峰可超 8s
+const REQUEST_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(15);
 
 /// 统计今日（本地时区 0 点起）新增的记忆数。
 /// GET /agentmemory/memories 按 createdAt 倒序返回，逐页统计直到遇到昨日记忆。
@@ -30,6 +32,7 @@ pub async fn count_today(client: &reqwest::Client, config: &AppConfig) -> Result
             req = req.query(&[("cursor", c)]);
         }
         let resp = req
+            .timeout(REQUEST_TIMEOUT)
             .send()
             .await
             .map_err(|e| format!("请求失败: {e}"))?
