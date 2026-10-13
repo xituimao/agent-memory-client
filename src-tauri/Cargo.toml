@@ -1,6 +1,6 @@
 [package]
 name = "agent-memory-client"
-version = "0.1.0"
+version = "0.1.1"
 description = "Minimal tray client for a self-hosted agentmemory server"
 authors = ["xituimao"]
 edition = "2024"
