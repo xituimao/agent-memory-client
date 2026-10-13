@@ -68,6 +68,12 @@ impl AppConfig {
         format!("http://localhost:{}", self.rest_port)
     }
 
+    /// viewer 的实时数据走 WebSocket，端口为 viewer 端口 - 1（即文档中的 3112 streams）。
+    /// 隧道参数、残留进程识别、端口占用提示都以这里为唯一来源。
+    pub fn streams_port(&self) -> u16 {
+        self.viewer_port.saturating_sub(1)
+    }
+
     /// 文档中的 MCP 接入命令（供一键复制）
     pub fn mcp_command(&self) -> String {
         format!(
@@ -112,8 +118,8 @@ impl AppConfig {
         args.push(format!("{}:localhost:{}", self.rest_port, self.rest_port));
         args.push("-L".to_string());
         args.push(format!("{}:localhost:{}", self.viewer_port, self.viewer_port));
-        // viewer 的实时数据走 WebSocket，端口默认为 viewer 端口 - 1（即文档中的 3112 streams）
-        let streams_port = self.viewer_port.saturating_sub(1);
+        // viewer 的实时数据走 WebSocket，端口为 viewer 端口 - 1（即文档中的 3112 streams）
+        let streams_port = self.streams_port();
         args.push("-L".to_string());
         args.push(format!("{}:localhost:{}", streams_port, streams_port));
         if !self.extra_ssh_args.trim().is_empty() {

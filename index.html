@@ -193,6 +193,16 @@
         </div>
       </section>
 
+
+      <!-- 检测到本程序已在运行时显示的确认提示（不用系统弹窗：Accessory 应用下不可靠） -->
+      <div class="takeover hidden" id="takeoverOverlay" role="alertdialog" aria-labelledby="takeoverTitle">
+        <div class="takeover-card">
+          <h3 id="takeoverTitle">本程序已经在运行</h3>
+          <p id="takeoverText">继续启动会先关闭正在运行的程序，它当前的连接会断开。</p>
+          <button class="primary" id="btnTakeover">继续启动</button>
+        </div>
+      </div>
+
       <p class="toast" id="toast"></p>
     </main>
     <script type="module" src="/src/main.ts"></script>

@@ -1,6 +1,8 @@
 mod agents;
 mod config;
 mod health;
+mod instance;
+mod ports;
 mod state;
 mod stats;
 #[cfg(test)]
@@ -183,6 +185,39 @@ fn repair_agent(state: tauri::State<'_, SharedState>, id: String) -> Result<Stri
     }
 }
 
+/// 待关闭的旧实例数量（0 = 无需确认）。前端据此显示「本程序已经在运行」的确认提示。
+#[tauri::command]
+fn pending_takeover(app: tauri::AppHandle) -> u32 {
+    let shared = app.state::<SharedState>().inner().clone();
+    state::pending_takeover(&shared)
+}
+
+/// 用户确认「关掉旧的、启动新的」：结束所有旧实例 → 抢实例锁 → 启动隧道。
+#[tauri::command]
+async fn takeover_instance(app: tauri::AppHandle) -> Result<u32, String> {
+    let shared = app.state::<SharedState>().inner().clone();
+    if state::pending_takeover(&shared) == 0 {
+        return Err("当前没有需要关闭的程序".to_string());
+    }
+    let app2 = app.clone();
+    let shared2 = shared.clone();
+    // 结束进程 + 等锁端口释放都是阻塞 IO，放到阻塞线程池，别卡住 async runtime
+    let killed = tokio::task::spawn_blocking(move || {
+        let n = instance::kill_other_instances();
+        if !instance::wait_until_free(std::time::Duration::from_secs(5)) {
+            return Err("无法关闭正在运行的程序，请手动退出它后再试一次".to_string());
+        }
+        engage(&app2, &shared2);
+        Ok(n)
+    })
+    .await
+    .map_err(|e| format!("切换失败：{e}"))??;
+
+    state::set_pending_takeover(&shared, 0);
+    log::info!("用户确认接管，已结束 {killed} 个正在运行的实例");
+    Ok(killed as u32)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -221,52 +256,22 @@ pub fn run() {
 
             let app_config_dir = app.path().app_config_dir()?;
             let shared = state::new(&app_config_dir);
-            let initial = state::current_status(&shared);
-
-            app.manage(tray::TrayState::new());
-            tray::build_tray(
-                app.handle(),
-                &initial,
-                state::get_config(&shared).auto_start,
-                state::get_config(&shared).auto_connect,
-            )?;
-
-            let handle = app.handle().clone();
-            let tunnel_state = shared.clone();
-            tauri::async_runtime::spawn(async move {
-                tunnel::tunnel_loop(handle, tunnel_state).await;
-            });
-
-            let handle = app.handle().clone();
-            let health_state = shared.clone();
-            tauri::async_runtime::spawn(async move {
-                health::health_loop(handle, health_state).await;
-            });
-
             app.manage(shared);
 
-            // 登录自启/托盘启动带 --tray 参数：不弹窗口，只驻留托盘
+            // 登录自启（--tray）拉起的第二个实例：静默让位，不弹窗打扰用户
             let start_hidden = std::env::args().any(|a| a == "--tray");
-            if let Some(window) = app.get_webview_window("main") {
-                if start_hidden {
-                    let _ = window.hide();
-                } else {
-                    // 直接双击启动时必须先提升为 Regular 再置前，
-                    // 否则 Accessory 后台启动会让 WKWebView 不渲染（白屏）
-                    tray::show_window(app.handle());
-                }
-                let window_clone = window.clone();
-                window.on_window_event(move |event| {
-                    if let tauri::WindowEvent::CloseRequested { api, .. } = event {
-                        api.prevent_close();
-                        let _ = window_clone.hide();
-                        #[cfg(target_os = "macos")]
-                        let _ = window_clone
-                            .app_handle()
-                            .set_activation_policy(tauri::ActivationPolicy::Accessory);
-                    }
-                });
+
+            // 单实例闸门：已有实例在跑时，界面显示「本程序已经在运行」的确认提示，
+            // 用户点「继续启动」后结束所有旧实例再接管（见 boot 与 takeover_instance）。
+            // 登录自启（--tray）拉起的实例判断到已有实例就静默让位，绝不打扰用户。
+            let others = instance::other_instances();
+            if start_hidden && (instance::existing() || !others.is_empty()) {
+                log::info!("已有实例在运行，本次自启实例直接退出");
+                app.handle().exit(0);
+                return Ok(());
             }
+
+            boot(app.handle(), start_hidden);
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -280,7 +285,9 @@ pub fn run() {
             install_agent,
             repair_agent,
             scan_generic_agents,
-            install_generic_agent
+            install_generic_agent,
+            pending_takeover,
+            takeover_instance
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
@@ -293,4 +300,103 @@ pub fn run() {
                     }
             }
         });
+}
+
+/// 正式启动流程：清理残留隧道 → （有旧实例则进入待确认）→ 建托盘 → 显示/隐藏窗口。
+///
+/// 只调用一次（在 `setup` 里）。**抢实例锁与起隧道被拆到 `engage`**：
+/// 检测到还有本程序实例在跑时，先不抢锁、不建隧道，由界面显示「本程序已经在运行」的确认提示，
+/// 用户点「继续启动」后再调 `takeover_instance` 真正接管——避免两个实例互抢转发端口。
+fn boot(app: &tauri::AppHandle, start_hidden: bool) {
+    let shared = app.state::<SharedState>().inner().clone();
+    let cfg = state::get_config(&shared);
+
+    // 残留隧道必须在 tunnel_loop 起来之前清，否则会把自己刚拉起的 ssh 当成残留
+    let cleaned = ports::cleanup_stale_forwards(&cfg);
+    if cleaned > 0 {
+        log::info!("已清理 {cleaned} 个残留隧道进程");
+    }
+    // 清完仍被占用 = 外部程序占用，仅提示，照常启动（界面上会显示连不上）
+    for port in ports::occupied_ports(&cfg) {
+        log::warn!("本地端口 {port} 已被其它程序占用，隧道可能建立失败");
+    }
+
+    // 还有别的实例在跑 → 先只显示确认提示，等用户确认后再接管
+    let running = instance::other_instances().len();
+    if running > 0 {
+        state::set_pending_takeover(&shared, running as u32);
+        log::info!("检测到 {running} 个正在运行的实例，等待用户在界面上确认");
+    } else {
+        engage(app, &shared);
+    }
+
+    let initial = state::current_status(&shared);
+    app.manage(tray::TrayState::new());
+    if let Err(e) = tray::build_tray(app, &initial, cfg.auto_start, cfg.auto_connect) {
+        log::error!("托盘初始化失败：{e}");
+    }
+
+    let handle = app.clone();
+    let health_state = shared.clone();
+    tauri::async_runtime::spawn(async move {
+        health::health_loop(handle, health_state).await;
+    });
+
+    if let Some(window) = app.get_webview_window("main") {
+        if start_hidden {
+            let _ = window.hide();
+        } else {
+            // 直接双击启动时必须先提升为 Regular 再置前，
+            // 否则 Accessory 后台启动会让 WKWebView 不渲染（白屏）
+            tray::show_window(app);
+        }
+        let window_clone = window.clone();
+        window.on_window_event(move |event| {
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                api.prevent_close();
+                let _ = window_clone.hide();
+                #[cfg(target_os = "macos")]
+                let _ = window_clone
+                    .app_handle()
+                    .set_activation_policy(tauri::ActivationPolicy::Accessory);
+            }
+        });
+    }
+}
+
+/// 抢实例锁并启动隧道循环。
+///
+/// 两条路径会调用它：① 启动时没有别的实例；② 用户在界面上确认接管之后。
+/// 之所以单独拆出来，是因为「确认接管」必须先结束旧实例、等它把锁端口让出来，才能抢锁。
+fn engage(app: &tauri::AppHandle, shared: &SharedState) {
+    if let Err(e) = instance::acquire(app.clone()) {
+        log::warn!("{e}");
+    }
+    let handle = app.clone();
+    let tunnel_state = shared.clone();
+    tauri::async_runtime::spawn(async move {
+        tunnel::tunnel_loop(handle, tunnel_state).await;
+    });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// 待确认期间不得抢锁建隧道：是否接管完全由 pending 状态驱动
+    #[test]
+    fn pending_takeover_gates_the_handover() {
+        let dir = std::env::temp_dir().join(format!("amc-takeover-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let shared = state::new(&dir);
+
+        assert_eq!(state::pending_takeover(&shared), 0);
+        state::set_pending_takeover(&shared, 2);
+        assert_eq!(state::pending_takeover(&shared), 2);
+        state::set_pending_takeover(&shared, 0);
+        assert_eq!(state::pending_takeover(&shared), 0);
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 }
