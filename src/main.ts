@@ -408,10 +408,9 @@ function renderGenericRow(g: GenericAgentInfo, hidden = false): HTMLElement {
     btn.textContent = "接入中…";
     try {
       const output = await invoke<string>("install_generic_agent", { id: g.id });
-      row.classList.add("done");
-      btn.textContent = "已接入 ✓";
-      msg.classList.add("ok");
-      msg.textContent = output;
+      toast(output);
+      // 回读后端真实检测结果，避免写入失败时界面仍显示「已接入」
+      await loadAgents();
     } catch (e) {
       row.classList.add("failed");
       btn.disabled = false;
@@ -472,10 +471,9 @@ function renderAgentRow(a: AgentInfo, hidden = false): HTMLElement {
     msg.textContent = "";
     try {
       await invoke<string>("install_agent", { id: a.id });
-      row.classList.add("done");
-      btn.textContent = "已接入 ✓";
-      msg.classList.add("ok");
-      msg.textContent = "接入成功，该助手的记忆将自动同步到你的服务器。";
+      toast("接入成功，该助手的记忆将自动同步到你的服务器。");
+      // 回读后端真实检测结果，避免写入失败时界面仍显示「已接入」
+      await loadAgents();
     } catch (e) {
       row.classList.add("failed");
       btn.disabled = false;

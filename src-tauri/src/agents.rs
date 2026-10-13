@@ -26,7 +26,9 @@ struct AgentDef {
     app: Option<&'static str>,
     /// VS Code / Cursor 扩展标识（可选，匹配扩展目录名）
     ext: Option<&'static str>,
-    /// 接入痕迹检测：agentmemory 会写入的配置文件（相对用户目录）
+    /// 接入痕迹检测：官方 `agentmemory connect <id>` 实际写入的配置文件（相对用户目录）
+    /// ⚠️ 必须与官方 connect 源码里的 configPath 一一对应。填错或留空会导致
+    /// 「点了接入当次显示已接入、刷新后又变回接入记忆」的假象（配置其实已写成功）。
     wired_paths: &'static [&'static str],
 }
 
@@ -37,21 +39,23 @@ const AGENTS: &[AgentDef] = &[
     AgentDef { id: "gemini-cli", name: "Gemini CLI", description: "Google 终端 AI 助手", cmd: "gemini", app: None, ext: None, wired_paths: &[".gemini/settings.json"] },
     AgentDef { id: "qwen", name: "Qwen Code", description: "通义千问终端编码助手", cmd: "qwen", app: None, ext: None, wired_paths: &[".qwen/settings.json"] },
     // 注意：不能用 gh 判断——gh 是 GitHub CLI，装了它不等于装了 Copilot CLI
-    AgentDef { id: "copilot-cli", name: "Copilot CLI", description: "GitHub 终端助手", cmd: "copilot", app: None, ext: None, wired_paths: &[] },
+    AgentDef { id: "copilot-cli", name: "Copilot CLI", description: "GitHub 终端助手", cmd: "copilot", app: None, ext: None, wired_paths: &[".copilot/mcp-config.json"] },
     AgentDef { id: "cursor", name: "Cursor", description: "AI 代码编辑器", cmd: "cursor", app: Some("/Applications/Cursor.app"), ext: None, wired_paths: &[".cursor/mcp.json"] },
-    AgentDef { id: "cline", name: "Cline", description: "VS Code 编码助手", cmd: "", app: None, ext: Some("cline"), wired_paths: &[] },
+    AgentDef { id: "cline", name: "Cline", description: "VS Code 编码助手", cmd: "", app: None, ext: Some("cline"), wired_paths: &[".cline/mcp.json"] },
     AgentDef { id: "continue", name: "Continue", description: "开源 IDE 编码助手", cmd: "", app: None, ext: Some("continue"), wired_paths: &[".continue/config.json"] },
     AgentDef { id: "zed", name: "Zed", description: "高性能代码编辑器", cmd: "zed", app: Some("/Applications/Zed.app"), ext: None, wired_paths: &[".config/zed/settings.json"] },
-    AgentDef { id: "warp", name: "Warp", description: "AI 终端", cmd: "warp", app: Some("/Applications/Warp.app"), ext: None, wired_paths: &[] },
+    AgentDef { id: "warp", name: "Warp", description: "AI 终端", cmd: "warp", app: Some("/Applications/Warp.app"), ext: None, wired_paths: &[".warp/.mcp.json"] },
     AgentDef { id: "kiro", name: "Kiro", description: "AWS AI IDE", cmd: "kiro", app: None, ext: None, wired_paths: &[".kiro/settings/mcp.json"] },
-    AgentDef { id: "antigravity", name: "Antigravity", description: "Google AI IDE", cmd: "", app: Some("/Applications/Antigravity.app"), ext: None, wired_paths: &[] },
-    AgentDef { id: "antigravity-cli", name: "Antigravity CLI", description: "Google 终端助手", cmd: "agy", app: None, ext: None, wired_paths: &[] },
-    AgentDef { id: "devin", name: "Devin", description: "Cognition AI 工程师", cmd: "devin", app: None, ext: None, wired_paths: &[] },
+    // Antigravity IDE 与其 CLI 共用 ~/.gemini/config/mcp_config.json（官方 connect 两处 configPath 相同）
+    AgentDef { id: "antigravity", name: "Antigravity", description: "Google AI IDE", cmd: "", app: Some("/Applications/Antigravity.app"), ext: None, wired_paths: &[".gemini/config/mcp_config.json"] },
+    AgentDef { id: "antigravity-cli", name: "Antigravity CLI", description: "Google 终端助手", cmd: "agy", app: None, ext: None, wired_paths: &[".gemini/config/mcp_config.json"] },
+    AgentDef { id: "devin", name: "Devin", description: "Cognition AI 工程师", cmd: "devin", app: None, ext: None, wired_paths: &[".config/devin/config.json"] },
     AgentDef { id: "droid", name: "Droid", description: "Factory 终端工程师", cmd: "droid", app: None, ext: None, wired_paths: &[".factory/mcp.json"] },
-    AgentDef { id: "dsh", name: "DSH", description: "DeepSeek 终端助手", cmd: "dsh", app: None, ext: None, wired_paths: &[".dsh/mcp.json"] },
+    // DSH 的接入写进 $DSH_HOME/cordis.patch.yml（home 级 patch 层），不是 mcp.json
+    AgentDef { id: "dsh", name: "DSH", description: "DeepSeek 终端助手", cmd: "dsh", app: None, ext: None, wired_paths: &[".dsh/cordis.patch.yml"] },
     AgentDef { id: "opencode", name: "OpenCode", description: "开源终端 AI 编码工具", cmd: "opencode", app: None, ext: None, wired_paths: &[".config/opencode/opencode.json"] },
-    AgentDef { id: "openclaw", name: "OpenClaw", description: "开源 AI 助手框架", cmd: "openclaw", app: None, ext: None, wired_paths: &[] },
-    AgentDef { id: "hermes", name: "Hermes", description: "Nous Research 助手", cmd: "hermes", app: None, ext: None, wired_paths: &[] },
+    AgentDef { id: "openclaw", name: "OpenClaw", description: "开源 AI 助手框架", cmd: "openclaw", app: None, ext: None, wired_paths: &[".openclaw/openclaw.json"] },
+    AgentDef { id: "hermes", name: "Hermes", description: "Nous Research 助手", cmd: "hermes", app: None, ext: None, wired_paths: &[".hermes/config.yaml"] },
     AgentDef { id: "pi", name: "Pi", description: "Mario Zecher 极简助手", cmd: "pi", app: None, ext: None, wired_paths: &[] },
     AgentDef { id: "openhuman", name: "OpenHuman", description: "开源个人 AI", cmd: "openhuman", app: None, ext: None, wired_paths: &[] },
 ];
@@ -484,6 +488,77 @@ mod tests {
         std::fs::write(&file, r#"{"mcpServers":{"agentmemory":{"env":{"AGENTMEMORY_SECRET":"real"}}}}"#).unwrap();
         assert!(!has_placeholder_env(&home, "settings.json"));
         let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    /// 接入痕迹路径必须与官方 `agentmemory connect` 的 configPath 一致。
+    /// 历史上这里是「注入成功 → 刷新又变回接入记忆」的根因：路径填错或留空，
+    /// 写入是真成功了的，只是扫描读的是另一个（不存在的）文件。
+    #[test]
+    fn wired_paths_match_official_connect_targets() {
+        let expected = [
+            ("claude-code", ".claude.json"),
+            ("codex", ".codex/config.toml"),
+            ("gemini-cli", ".gemini/settings.json"),
+            ("qwen", ".qwen/settings.json"),
+            ("copilot-cli", ".copilot/mcp-config.json"),
+            ("cursor", ".cursor/mcp.json"),
+            ("cline", ".cline/mcp.json"),
+            ("continue", ".continue/config.json"),
+            ("zed", ".config/zed/settings.json"),
+            ("warp", ".warp/.mcp.json"),
+            ("kiro", ".kiro/settings/mcp.json"),
+            ("antigravity", ".gemini/config/mcp_config.json"),
+            ("antigravity-cli", ".gemini/config/mcp_config.json"),
+            ("devin", ".config/devin/config.json"),
+            ("droid", ".factory/mcp.json"),
+            ("dsh", ".dsh/cordis.patch.yml"),
+            ("opencode", ".config/opencode/opencode.json"),
+            ("openclaw", ".openclaw/openclaw.json"),
+            ("hermes", ".hermes/config.yaml"),
+        ];
+        for (id, rel) in expected {
+            let def = AGENTS
+                .iter()
+                .find(|d| d.id == id)
+                .unwrap_or_else(|| panic!("未找到客户端 {id}"));
+            assert!(
+                def.wired_paths.contains(&rel),
+                "{id} 的接入痕迹路径应为 {rel}，实际为 {:?}",
+                def.wired_paths
+            );
+        }
+    }
+
+    /// 真实配置文件形态下能检出接入痕迹（Antigravity 用 JSON、DSH 用 YAML patch 层）
+    #[test]
+    fn wire_marker_detects_real_config_shapes() {
+        let dir = tmpdir("wire-marker");
+        let home = Some(dir.clone());
+
+        std::fs::create_dir_all(dir.join(".gemini/config")).unwrap();
+        std::fs::write(
+            dir.join(".gemini/config/mcp_config.json"),
+            r#"{"mcpServers":{"agentmemory":{"command":"npx","args":["-y","@agentmemory/mcp"]}}}"#,
+        )
+        .unwrap();
+
+        std::fs::create_dir_all(dir.join(".dsh")).unwrap();
+        std::fs::write(
+            dir.join(".dsh/cordis.patch.yml"),
+            "- insert:\n    - id: agentmemory\n      name: '@deepseek-ai/dsh-mcp-client'\n",
+        )
+        .unwrap();
+
+        assert!(has_wire_marker(&home, ".gemini/config/mcp_config.json"));
+        assert!(has_wire_marker(&home, ".dsh/cordis.patch.yml"));
+
+        // 旧的错误路径与未接入的客户端都不能误判为已接入
+        std::fs::create_dir_all(dir.join(".codex")).unwrap();
+        std::fs::write(dir.join(".codex/config.toml"), "[mcp_servers]\n").unwrap();
+        assert!(!has_wire_marker(&home, ".codex/config.toml"));
+        assert!(!has_wire_marker(&home, ".dsh/mcp.json"));
+
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     fn tmpdir(tag: &str) -> PathBuf {
