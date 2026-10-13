@@ -30,6 +30,9 @@ interface AppConfig {
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 
 const els = {
+  takeoverOverlay: $("takeoverOverlay"),
+  takeoverText: $("takeoverText"),
+  btnTakeover: $("btnTakeover") as HTMLButtonElement,
   viewHome: $("viewHome"),
   viewSettings: $("viewSettings"),
   hero: $("hero"),
@@ -484,6 +487,41 @@ function renderAgentRow(a: AgentInfo, hidden = false): HTMLElement {
   return row;
 }
 
+/* ---------- 多实例：确认后用本次启动取代正在运行的实例 ---------- */
+
+/// 若后端检测到已有实例在运行，展示确认提示（不用系统弹窗：Accessory 应用下会「看不见就返回」）
+async function checkTakeover() {
+  try {
+    const running = await invoke<number>("pending_takeover");
+    if (running <= 0) return;
+    els.takeoverText.textContent = running > 1
+      ? `检测到 ${running} 个正在运行的程序。继续启动会先关闭它们，它们当前的连接会断开。`
+      : "检测到本程序已经在运行。继续启动会先关闭它，它当前的连接会断开。";
+    els.takeoverOverlay.classList.remove("hidden");
+  } catch {
+    /* 取不到就当作无需确认，不打扰用户 */
+  }
+}
+
+function bindTakeover() {
+  els.btnTakeover.addEventListener("click", async () => {
+    els.btnTakeover.disabled = true;
+    els.btnTakeover.textContent = "正在切换…";
+    try {
+      const killed = await invoke<number>("takeover_instance");
+      els.takeoverOverlay.classList.add("hidden");
+      toast(killed > 0 ? `已关闭 ${killed} 个正在运行的程序` : "已启动");
+      renderStatus(await invoke<Status>("get_status"));
+    bindTakeover();
+    await checkTakeover();
+    } catch (e) {
+      els.btnTakeover.disabled = false;
+      els.btnTakeover.textContent = "继续启动";
+      toast(String(e), false);
+    }
+  });
+}
+
 /* ---------- 初始化 ---------- */
 
 async function init() {
@@ -491,6 +529,8 @@ async function init() {
     currentConfig = await invoke<AppConfig>("get_config");
     fillForm(currentConfig);
     renderStatus(await invoke<Status>("get_status"));
+    bindTakeover();
+    await checkTakeover();
     await listen<Status>("status-changed", (e) => renderStatus(e.payload));
     await listen<Stats>("stats-changed", (e) => {
       if (currentStatus.state !== "online") return;

@@ -1,6 +1,6 @@
 use serde::Serialize;
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicBool, AtomicU64};
+use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64};
 use std::sync::Mutex;
 
 use tauri::Emitter;
@@ -49,6 +49,9 @@ pub struct Inner {
     pub tunnel_notify: tokio::sync::Notify,
     /// 当前 ssh 子进程（用于强制终止）
     pub child: Mutex<Option<tokio::process::Child>>,
+    /// 待用户确认接管的旧实例数量（0 = 无需确认）。>0 时不抢隧道锁、不建隧道，
+    /// 界面显示「本程序已经在运行」的确认提示，用户确认后再接管。
+    pub pending_takeover: AtomicU32,
 }
 
 pub type SharedState = Arc<Inner>;
@@ -68,6 +71,7 @@ pub fn new(app_config_dir: &std::path::Path) -> SharedState {
         manual_disconnect: AtomicBool::new(!auto_connect),
         tunnel_notify: tokio::sync::Notify::new(),
         child: Mutex::new(None),
+        pending_takeover: AtomicU32::new(0),
     })
 }
 
@@ -118,3 +122,13 @@ pub fn current_generation(state: &SharedState) -> u64 {
     state.tunnel_generation.load(std::sync::atomic::Ordering::SeqCst)
 }
 
+
+/// 待确认接管的旧实例数量（0 = 无需确认）
+pub fn pending_takeover(s: &SharedState) -> u32 {
+    s.pending_takeover.load(std::sync::atomic::Ordering::SeqCst)
+}
+
+pub fn set_pending_takeover(s: &SharedState, running: u32) {
+    s.pending_takeover
+        .store(running, std::sync::atomic::Ordering::SeqCst);
+}

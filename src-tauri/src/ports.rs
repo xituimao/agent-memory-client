@@ -221,6 +221,15 @@ mod tests {
         let port = holder.local_addr().unwrap().port();
         assert!(!bindable(port));
         drop(holder);
-        assert!(bindable(port));
+        // 放开后应能绑定。并发跑测试时，另一个用例可能瞬间抢到同一个随机端口，
+        // 所以这里轮询等待而不是一次性断言（否则就是 flaky 用例）。
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
+        while !bindable(port) {
+            assert!(
+                std::time::Instant::now() < deadline,
+                "端口 {port} 释放后 2 秒仍不可绑定"
+            );
+            std::thread::sleep(std::time::Duration::from_millis(50));
+        }
     }
 }

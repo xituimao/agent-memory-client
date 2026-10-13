@@ -12,7 +12,6 @@ mod tunnel;
 
 use tauri::Manager;
 use tauri_plugin_autostart::ManagerExt;
-use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind, MessageDialogResult};
 
 use crate::state::{SharedState, Status};
 
@@ -186,6 +185,39 @@ fn repair_agent(state: tauri::State<'_, SharedState>, id: String) -> Result<Stri
     }
 }
 
+/// 待关闭的旧实例数量（0 = 无需确认）。前端据此显示「本程序已经在运行」的确认提示。
+#[tauri::command]
+fn pending_takeover(app: tauri::AppHandle) -> u32 {
+    let shared = app.state::<SharedState>().inner().clone();
+    state::pending_takeover(&shared)
+}
+
+/// 用户确认「关掉旧的、启动新的」：结束所有旧实例 → 抢实例锁 → 启动隧道。
+#[tauri::command]
+async fn takeover_instance(app: tauri::AppHandle) -> Result<u32, String> {
+    let shared = app.state::<SharedState>().inner().clone();
+    if state::pending_takeover(&shared) == 0 {
+        return Err("当前没有需要关闭的程序".to_string());
+    }
+    let app2 = app.clone();
+    let shared2 = shared.clone();
+    // 结束进程 + 等锁端口释放都是阻塞 IO，放到阻塞线程池，别卡住 async runtime
+    let killed = tokio::task::spawn_blocking(move || {
+        let n = instance::kill_other_instances();
+        if !instance::wait_until_free(std::time::Duration::from_secs(5)) {
+            return Err("无法关闭正在运行的程序，请手动退出它后再试一次".to_string());
+        }
+        engage(&app2, &shared2);
+        Ok(n)
+    })
+    .await
+    .map_err(|e| format!("切换失败：{e}"))??;
+
+    state::set_pending_takeover(&shared, 0);
+    log::info!("用户确认接管，已结束 {killed} 个正在运行的实例");
+    Ok(killed as u32)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -229,15 +261,13 @@ pub fn run() {
             // 登录自启（--tray）拉起的第二个实例：静默让位，不弹窗打扰用户
             let start_hidden = std::env::args().any(|a| a == "--tray");
 
-            // 单实例闸门：已有实例在跑时，让用户决定用哪一个。
-            // 必须在起第二个托盘图标 / 第二条隧道之前拦下，否则两个实例会互抢转发端口。
-            if instance::existing() {
-                if start_hidden {
-                    log::info!("已有实例在运行，本次自启实例直接退出");
-                    app.handle().exit(0);
-                    return Ok(());
-                }
-                ask_which_instance(app.handle(), start_hidden);
+            // 单实例闸门：已有实例在跑时，界面显示「本程序已经在运行」的确认提示，
+            // 用户点「继续启动」后结束所有旧实例再接管（见 boot 与 takeover_instance）。
+            // 登录自启（--tray）拉起的实例判断到已有实例就静默让位，绝不打扰用户。
+            let others = instance::other_instances();
+            if start_hidden && (instance::existing() || !others.is_empty()) {
+                log::info!("已有实例在运行，本次自启实例直接退出");
+                app.handle().exit(0);
                 return Ok(());
             }
 
@@ -255,7 +285,9 @@ pub fn run() {
             install_agent,
             repair_agent,
             scan_generic_agents,
-            install_generic_agent
+            install_generic_agent,
+            pending_takeover,
+            takeover_instance
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
@@ -270,127 +302,11 @@ pub fn run() {
         });
 }
 
-/// 检测到已有实例时：先显示窗口，再弹「用新的 / 用旧的」让用户当场选，按选择接管或让位。
+/// 正式启动流程：清理残留隧道 → （有旧实例则进入待确认）→ 建托盘 → 显示/隐藏窗口。
 ///
-/// 两处实测教训（都踩过）：
-/// 1. 弹窗必须有可见窗口——Accessory 应用窗口还没显示时，弹窗会「看不见就返回默认结果」，
-///    用户等于没得选，所以先 `tray::show_window` 并稍等它成为 key window；
-/// 2. 必须用阻塞式弹窗——异步 `show_with_result` 在 macOS 上实测不等用户点击就回 Cancel。
-///    官方要求阻塞式弹窗不要在主线程序调用，而接管旧实例本来就要做秒级阻塞 IO，
-///    因此整段协商都放在独立线程里，最后再回主线程 `boot`。
-fn ask_which_instance(app: &tauri::AppHandle, start_hidden: bool) {
-    tray::show_window(app);
-    // 激活本 app：非活跃 app 的原生模态框会「看不见就返回默认值」，用户等于没得选
-    #[cfg(target_os = "macos")]
-    let _ = app.show();
-    let handle = app.clone();
-    std::thread::spawn(move || {
-        // 等窗口真正成为 key window：不聚焦时原生模态框会立刻返回（等于没等用户），
-        // 这里轮询到获焦为止（最多 2 秒），再补一次聚焦。
-        for _ in 0..20 {
-            let focused = handle
-                .get_webview_window("main")
-                .and_then(|w| w.is_focused().ok())
-                .unwrap_or(false);
-            if focused {
-                break;
-            }
-            std::thread::sleep(std::time::Duration::from_millis(100));
-        }
-        let focus_handle = handle.clone();
-        let _ = handle.run_on_main_thread(move || {
-            if let Some(window) = focus_handle.get_webview_window("main") {
-                let _ = window.show();
-                let _ = window.set_focus();
-            }
-        });
-        std::thread::sleep(std::time::Duration::from_millis(400));
-
-        let started = std::time::Instant::now();
-        let choice = handle
-            .dialog()
-            .message(
-                "检测到本程序已经有一个在运行。\n\n\
-                 「用新的」：先关闭正在运行的那个（它会断开连接），再用本次启动。\n\
-                 「用旧的」：本次不启动，直接打开正在运行的那个。",
-            )
-            .title("本程序已在运行")
-            .kind(MessageDialogKind::Info)
-            .buttons(MessageDialogButtons::OkCancelCustom(
-                "用新的".to_string(),
-                "用旧的".to_string(),
-            ))
-            .blocking_show_with_result();
-        let elapsed = started.elapsed();
-
-        if should_yield_to_running(&choice, elapsed) {
-            // 用旧的：把正在运行的那个调到前台，本次退出
-            instance::ask_show();
-            handle.exit(0);
-            return;
-        }
-
-        // 用新的：先礼后兵——请旧实例优雅退出（它会回收 ssh 子进程），无响应再强杀兜底
-        let quit_ok = instance::ask_quit();
-        let free_after_quit = instance::wait_until_free(instance::RELEASE_TIMEOUT);
-        log::info!("请旧实例退出：已响应={quit_ok} 已释放={free_after_quit}");
-        if !quit_ok || !free_after_quit {
-            match instance::holder_pid() {
-                Some(pid) => {
-                    log::warn!("旧实例未响应退出请求，强制结束进程 {pid}");
-                    instance::force_kill(pid);
-                }
-                None => log::warn!("旧实例未响应退出请求，且无法定位其进程"),
-            }
-        }
-        if !instance::wait_until_free(std::time::Duration::from_secs(5)) {
-            log::warn!("接管失败：实例锁端口仍被占用");
-            // 接管不了就本次不启动，绝不允许两个实例同时抢隧道
-            handle
-                .dialog()
-                .message("无法关闭正在运行的实例，请手动退出它后再试。")
-                .title("启动失败")
-                .kind(MessageDialogKind::Error)
-                .blocking_show();
-            handle.exit(0);
-            return;
-        }
-        log::info!("已接管，开始启动");
-        let boot_handle = handle.clone();
-        let _ = handle.run_on_main_thread(move || boot(&boot_handle, start_hidden));
-    });
-}
-
-/// 用户是否选了「用新的」。
-///
-/// ⚠️ 用了自定义按钮文案时，弹窗返回的是 `Custom("用新的")` 而不是 `Ok`——
-/// 早先按 `Ok` 判断，导致点「用新的」永远被当成「用旧的」，新实例静默退出。
-fn chose_new_instance(choice: &MessageDialogResult) -> bool {
-    match choice {
-        MessageDialogResult::Custom(label) => label == "用新的",
-        MessageDialogResult::Ok | MessageDialogResult::Yes => true,
-        _ => false,
-    }
-}
-
-/// 本次是否应当让位给正在运行的实例（本次不启动）。
-///
-/// 除了用户明确选「用旧的」之外，还兜住一种更危险的偶发情况：弹窗在窗口尚未获焦时
-/// 「没等用户点就返回默认按钮」（实测偶发）。人类不可能在几百毫秒内点完，所以把
-/// 极短耗时一律当成「没真正弹给用户看」，按最安全的「用旧的」处理——
-/// 宁可本次不启动，也绝不静默杀掉用户正在使用的那个实例。
-fn should_yield_to_running(choice: &MessageDialogResult, elapsed: std::time::Duration) -> bool {
-    const MIN_HUMAN_CHOICE: std::time::Duration = std::time::Duration::from_millis(500);
-    if elapsed < MIN_HUMAN_CHOICE {
-        log::warn!("弹窗疑似未能正常展示（{elapsed:?}），按「用旧的」处理");
-        return true;
-    }
-    !chose_new_instance(choice)
-}
-
-/// 正式启动流程：清理残留隧道 → 持有实例锁 → 建托盘 → 起隧道与探活 → 显示/隐藏窗口。
-///
-/// 只调用一次，且在单实例闸门之后。
+/// 只调用一次（在 `setup` 里）。**抢实例锁与起隧道被拆到 `engage`**：
+/// 检测到还有本程序实例在跑时，先不抢锁、不建隧道，由界面显示「本程序已经在运行」的确认提示，
+/// 用户点「继续启动」后再调 `takeover_instance` 真正接管——避免两个实例互抢转发端口。
 fn boot(app: &tauri::AppHandle, start_hidden: bool) {
     let shared = app.state::<SharedState>().inner().clone();
     let cfg = state::get_config(&shared);
@@ -405,8 +321,13 @@ fn boot(app: &tauri::AppHandle, start_hidden: bool) {
         log::warn!("本地端口 {port} 已被其它程序占用，隧道可能建立失败");
     }
 
-    if let Err(e) = instance::acquire(app.clone()) {
-        log::warn!("{e}");
+    // 还有别的实例在跑 → 先只显示确认提示，等用户确认后再接管
+    let running = instance::other_instances().len();
+    if running > 0 {
+        state::set_pending_takeover(&shared, running as u32);
+        log::info!("检测到 {running} 个正在运行的实例，等待用户在界面上确认");
+    } else {
+        engage(app, &shared);
     }
 
     let initial = state::current_status(&shared);
@@ -414,12 +335,6 @@ fn boot(app: &tauri::AppHandle, start_hidden: bool) {
     if let Err(e) = tray::build_tray(app, &initial, cfg.auto_start, cfg.auto_connect) {
         log::error!("托盘初始化失败：{e}");
     }
-
-    let handle = app.clone();
-    let tunnel_state = shared.clone();
-    tauri::async_runtime::spawn(async move {
-        tunnel::tunnel_loop(handle, tunnel_state).await;
-    });
 
     let handle = app.clone();
     let health_state = shared.clone();
@@ -449,37 +364,39 @@ fn boot(app: &tauri::AppHandle, start_hidden: bool) {
     }
 }
 
+/// 抢实例锁并启动隧道循环。
+///
+/// 两条路径会调用它：① 启动时没有别的实例；② 用户在界面上确认接管之后。
+/// 之所以单独拆出来，是因为「确认接管」必须先结束旧实例、等它把锁端口让出来，才能抢锁。
+fn engage(app: &tauri::AppHandle, shared: &SharedState) {
+    if let Err(e) = instance::acquire(app.clone()) {
+        log::warn!("{e}");
+    }
+    let handle = app.clone();
+    let tunnel_state = shared.clone();
+    tauri::async_runtime::spawn(async move {
+        tunnel::tunnel_loop(handle, tunnel_state).await;
+    });
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    /// 自定义按钮文案时必须按文案判断，不能按 Ok（真实踩过的坑：点「用新的」被当成「用旧的」）
+    /// 待确认期间不得抢锁建隧道：是否接管完全由 pending 状态驱动
     #[test]
-    fn chosen_button_maps_to_intent() {
-        assert!(chose_new_instance(&MessageDialogResult::Custom("用新的".into())));
-        assert!(!chose_new_instance(&MessageDialogResult::Custom("用旧的".into())));
-        assert!(chose_new_instance(&MessageDialogResult::Ok));
-        assert!(chose_new_instance(&MessageDialogResult::Yes));
-        // 关闭弹窗 / 明确取消 / 文案对不上，一律按「不接管」处理，避免误关正在运行的实例
-        assert!(!chose_new_instance(&MessageDialogResult::Cancel));
-        assert!(!chose_new_instance(&MessageDialogResult::No));
-        assert!(!chose_new_instance(&MessageDialogResult::Custom("别的".into())));
-    }
+    fn pending_takeover_gates_the_handover() {
+        let dir = std::env::temp_dir().join(format!("amc-takeover-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let shared = state::new(&dir);
 
-    /// 让位判定：用户选旧的 → 让位；选新的且耗时正常 → 接管；耗时过短（弹窗没展示）→ 让位
-    #[test]
-    fn yield_decision_prefers_safety() {
-        use std::time::Duration;
-        let slow = Duration::from_secs(3);
-        let instant = Duration::from_millis(20);
-        let new = MessageDialogResult::Custom("用新的".into());
-        let old = MessageDialogResult::Custom("用旧的".into());
+        assert_eq!(state::pending_takeover(&shared), 0);
+        state::set_pending_takeover(&shared, 2);
+        assert_eq!(state::pending_takeover(&shared), 2);
+        state::set_pending_takeover(&shared, 0);
+        assert_eq!(state::pending_takeover(&shared), 0);
 
-        assert!(should_yield_to_running(&old, slow));
-        assert!(!should_yield_to_running(&new, slow));
-        // 秒退（无论返回什么）一律让位，绝不静默杀掉正在运行的实例
-        assert!(should_yield_to_running(&new, instant));
-        assert!(should_yield_to_running(&old, instant));
-        assert!(should_yield_to_running(&MessageDialogResult::Ok, instant));
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

@@ -46,12 +46,7 @@ pub fn existing() -> bool {
     request("ping").as_deref() == Some("pong")
 }
 
-/// 请旧实例把窗口调到前台（用户选「用旧的」）
-pub fn ask_show() -> bool {
-    request("show").is_some()
-}
-
-/// 请旧实例优雅退出（用户选「用新的」）。返回它是否作了响应。
+/// 请旧实例优雅退出（接管前先礼后兵）。返回它是否作了响应。
 pub fn ask_quit() -> bool {
     request("quit").is_some()
 }
@@ -73,6 +68,73 @@ fn wait_port_free(addr: SocketAddr, timeout: Duration) -> bool {
         }
         std::thread::sleep(Duration::from_millis(150));
     }
+}
+
+/// 本程序的可执行文件名——`.app` 与开发用的 `target/debug` 两种形态都叫这个，
+/// 按文件名精确匹配，绝不会误伤别的软件。
+const APP_BIN: &str = "agent-memory-client";
+
+/// 本机正在运行的**其它**本程序实例（PID + 可执行路径），不含当前进程。
+/// 非 unix 平台返回空（届时只靠锁端口检测，见 `existing`）。
+pub fn other_instances() -> Vec<(u32, String)> {
+    #[cfg(unix)]
+    {
+        // 用 comm 列（纯可执行路径，不含参数）：命令行拼接里 .app 路径带空格，
+        // 按空格切分取首字段会把正式 .app 实例整个漏掉。
+        let Ok(out) = std::process::Command::new("ps")
+            .args(["-ax", "-o", "pid=,comm="])
+            .output()
+        else {
+            return Vec::new();
+        };
+        let me = std::process::id();
+        String::from_utf8_lossy(&out.stdout)
+            .lines()
+            .filter_map(|line| {
+                let (pid, exe) = line.trim_start().split_once(' ')?;
+                let pid: u32 = pid.parse().ok()?;
+                if pid == me || !is_our_app(exe.trim()) {
+                    return None;
+                }
+                Some((pid, exe.trim().to_string()))
+            })
+            .collect()
+    }
+    #[cfg(not(unix))]
+    {
+        Vec::new()
+    }
+}
+
+/// 可执行路径是否为本程序（文件名精确等于 `agent-memory-client`）
+fn is_our_app(exe: &str) -> bool {
+    std::path::Path::new(exe.trim())
+        .file_name()
+        .is_some_and(|name| name == APP_BIN)
+}
+
+/// 结束**所有**其它本程序实例：先请锁持有者走正常退出链路（它会回收 ssh 子进程），
+/// 再逐个终止剩下的（旧版本、无锁的、卡死的）。返回终止的实例数。
+pub fn kill_other_instances() -> usize {
+    let targets = other_instances();
+    if targets.is_empty() {
+        return 0;
+    }
+    // 1) 锁持有者优先优雅退出：走 app.exit(0) → RunEvent::Exit → 回收 ssh 子进程
+    if let Some(pid) = holder_pid()
+        && targets.iter().any(|(p, _)| *p == pid)
+    {
+        ask_quit();
+        let _ = wait_until_free(RELEASE_TIMEOUT);
+    }
+    // 2) 其余实例（含仍没退干净的）逐个终止；重新枚举以跳过已退出的
+    let mut killed = 0;
+    for (pid, cmd) in other_instances() {
+        log::warn!("结束正在运行的实例 {pid}：{cmd}");
+        force_kill(pid);
+        killed += 1;
+    }
+    killed
 }
 
 /// 占用锁端口的进程 PID，供强杀兜底使用（旧实例卡死、不响应协议时）。
@@ -234,5 +296,32 @@ mod tests {
         assert!(!wait_port_free(addr, Duration::from_millis(300)));
         drop(holder);
         assert!(wait_port_free(addr, Duration::from_millis(300)));
+    }
+
+    /// 「所有进程都干掉」的第一步是认对人：只认可执行文件名精确等于 agent-memory-client
+    #[test]
+    fn recognizes_our_own_processes_only() {
+        // 正式 .app 的路径带空格，必须能认出来（早期按空格取首字段时这里漏掉了）
+        assert!(is_our_app(
+            "/Applications/Agent Memory.app/Contents/MacOS/agent-memory-client"
+        ));
+        assert!(is_our_app(
+            "/Users/x/Codes/agent-memory-client/src-tauri/target/debug/agent-memory-client"
+        ));
+        assert!(is_our_app("agent-memory-client"));
+
+        // 名字相近的、别的软件、shell 包装，一律不能杀
+        assert!(!is_our_app("agent-memory-client-helper"));
+        assert!(!is_our_app("/usr/bin/ssh"));
+        assert!(!is_our_app("/bin/zsh"));
+        assert!(!is_our_app("node"));
+        assert!(!is_our_app(""));
+    }
+
+    /// 当前进程不能被算作「其它实例」（否则自己杀自己）
+    #[test]
+    fn other_instances_excludes_self() {
+        let me = std::process::id();
+        assert!(other_instances().iter().all(|(pid, _)| *pid != me));
     }
 }
